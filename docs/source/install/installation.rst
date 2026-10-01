@@ -29,7 +29,7 @@ editable mode:
 
 .. code-block:: bash
 
-   git clone https://github.com/<your-account>/thunder4d.git
+   git clone https://github.com/victorkolt/thunder4d.git
    cd thunder4d
    pip install -e ".[examples]"
 
