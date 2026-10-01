@@ -20,7 +20,7 @@ Clone the repository (or unzip the archive) and either add its root folder to yo
 
 .. code-block:: bash
 
-   git clone https://github.com/<your-account>/thunder4d.git
+   git clone https://github.com/victorkolt/thunder4d.git
    cd thunder4d
    pip install numpy scipy matplotlib
    pip install -e .          # optional, if you add a pyproject.toml
