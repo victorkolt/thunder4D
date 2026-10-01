@@ -6,32 +6,32 @@ Requirements
 
 - Python ≥ 3.10
 - NumPy ≥ 2.0 (single-precision FFTs)
-- SciPy (optional, strongly recommended): ``scipy.fft`` is about 8× faster than
-  ``numpy.fft`` for the 2D transforms and can use several cores
+- SciPy (installed automatically): ``scipy.fft`` is about 8× faster than
+  ``numpy.fft`` for the 2D transforms and can use several cores; ``numpy.fft`` is used
+  as a fallback if SciPy is missing
 - Matplotlib (only for the example scripts)
 
 No GPU and no compiled extension are needed.
 
-Getting the code
-----------------
+Installing with pip
+-------------------
 
-Clone the repository (or unzip the archive) and either add its root folder to your
-``PYTHONPATH``, or install it in editable mode:
+.. code-block:: bash
+
+   pip install thunder4d                 # numpy + scipy
+   pip install "thunder4d[examples]"     # + matplotlib, for the example scripts
+
+Installing from source
+----------------------
+
+To get the example scripts or modify the code, clone the repository and install it in
+editable mode:
 
 .. code-block:: bash
 
    git clone https://github.com/<your-account>/thunder4d.git
    cd thunder4d
-   pip install numpy scipy matplotlib
-   pip install -e .          # optional, if you add a pyproject.toml
-
-Without installation, the examples add the parent folder to ``sys.path`` themselves:
-
-.. code-block:: python
-
-   import sys
-   sys.path.insert(0, "path/to/thunder4d")
-   import thunder4d as m
+   pip install -e ".[examples]"
 
 Checking the installation
 -------------------------

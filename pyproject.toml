@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thunder4d"
+dynamic = ["version"]
+description = "THUNDER4D: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Your Name", email = "you@example.org" }]
+keywords = ["UPPE", "multipass cell", "MPC", "nonlinear optics", "ultrafast", "post-compression",
+            "Herriott cell", "spatio-temporal", "pulse propagation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.10",      # fast multi-threaded FFTs (numpy.fft is used as a fallback)
+]
+
+[project.optional-dependencies]
+examples = ["matplotlib"]
+docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
+
+[project.urls]
+Documentation = "https://YOUR-ACCOUNT.github.io/thunder4d/"
+Source = "https://github.com/YOUR-ACCOUNT/thunder4d"
+
+[tool.setuptools]
+packages = ["thunder4d"]
+
+[tool.setuptools.dynamic]
+version = { attr = "thunder4d.__version__" }
