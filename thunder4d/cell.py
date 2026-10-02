@@ -18,7 +18,7 @@ from .grid import C0
 FS = 1e-15
 
 
-class MPCCell:
+class MPC:
     """Symmetric two-mirror cell.
 
     R            : mirror radius of curvature [m]
@@ -45,9 +45,9 @@ class MPCCell:
 
     @classmethod
     def herriott(cls, R, N, k, medium, n_passes=None, **kw):
-        """Re-entrant Herriott cell: N round trips (= spots per mirror), d = R (1 - cos(pi k/N)).
+        """Re-entrant Herriott cell: N round trips (= spots per mirror), d = R (1 + cos(pi k/N)).
         Default n_passes = 2N (one full re-entrant cycle)."""
-        d = R * (1 - np.cos(np.pi * k / N))
+        d = R * (1 + np.cos(np.pi * k / N))
         return cls(R, d, medium, n_passes or 2 * N, **kw)
 
     # ------------------------------------------------------------ modes

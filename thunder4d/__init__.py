@@ -8,7 +8,7 @@ from .materials import Material
 from .pulse import (Pulse, Beam, gaussian, super_gaussian, top_hat, knife_edge, measured_profile,
                     gaussian_spectrum, measured_spectrum, spectrum_from_temporal_field,
                     add_spectral_phase, zernike_wavefront)
-from .cell import MPCCell
+from .cell import MPC
 from .solver import UPPESolver
 from .simulation import MPCSimulation
 from . import diagnostics
