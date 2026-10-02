@@ -28,8 +28,8 @@ examples = ["matplotlib"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]
-Documentation = "https://YOUR-ACCOUNT.github.io/thunder4d/"
-Source = "https://github.com/YOUR-ACCOUNT/thunder4d"
+Documentation = "https://victorkolt.github.io/thunder4d/"
+Source = "https://github.com/victorkolt/thunder4d"
 
 [tool.setuptools]
 packages = ["thunder4d"]
