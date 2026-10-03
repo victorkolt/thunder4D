@@ -40,7 +40,7 @@ Checking the installation
 
    import thunder4d as m
 
-   cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=m.Material("Ar", 1.0))
+   cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=m.Material("Ar", 1.0))
    grid = m.suggest_grid(cell, 1030e-9, 900e-9, 1200e-9, 200e-15)
    print(grid.describe())
    print(grid.fft.backend)      # 'scipy' if SciPy was found, else 'numpy'
@@ -57,7 +57,7 @@ Repository layout
    │   ├── grid.py            Grid, FFT wrapper, suggest_grid
    │   ├── materials.py       Material (Sellmeier + n2)
    │   ├── pulse.py           spectra, profiles, aberrations, STCs, Beam, Pulse
-   │   ├── cell.py            MPCCell (geometry, eigenmode, nonlinear matching, mirrors)
+   │   ├── cell.py            MPC (geometry, eigenmode, nonlinear matching, mirrors)
    │   ├── solver.py          UPPESolver
    │   ├── simulation.py      MPCSimulation (pass loop, recording, checkpoints, saving)
    │   └── diagnostics.py     analysis functions

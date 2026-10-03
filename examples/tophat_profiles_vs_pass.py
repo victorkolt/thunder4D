@@ -14,7 +14,7 @@ import thunder4d as m
 
 lam0, fwhm, energy = 1030e-9, 200e-15, 1.2e-3
 gas = m.Material("Ar", 1.0)
-cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=gas)
+cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
 grid = m.suggest_grid(cell, lam0, 900e-9, 1200e-9, fwhm, box_factor=14)
 
 # "mirror"  : laser near field imaged onto the first mirror (flat-top on the mirror at pass 1)

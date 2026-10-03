@@ -8,7 +8,7 @@ Driver: propagates a pulse through the cell and records diagnostics after every 
 .. py:class:: MPCSimulation(pulse, cell, *, solver=None, record_every=1, far_field=True, max_order=6, mode_reference="linear", save_fields=(), save_dir=".", record_mirror=True, slit=None, profile_wavelengths=(), profile_bandwidth=0.0, profile_axis="x", **solver_kw)
 
    :param pulse: input :class:`~thunder4d.pulse.Pulse` (copied), defined at the cell centre
-   :param cell: :class:`~thunder4d.cell.MPCCell`
+   :param cell: :class:`~thunder4d.cell.MPC`
    :param solver: an existing :class:`~thunder4d.solver.UPPESolver`; otherwise one is
       created with ``**solver_kw`` (e.g. ``phi_max=0.02``)
    :param int record_every: record every n passes (pass 0 and the last pass always)

@@ -17,7 +17,7 @@ lam0, fwhm = 1030e-9, 200e-15
 ENERGY = 1.3e-3                # transmitted energy (after the edge)
 EDGE = 0.5                     # knife edge at x = +EDGE * w_mirror (blocks x > edge, ~16 % of a gaussian)
 gas = m.Material("Ar", 1.0)
-cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=gas)               # 20 passes
+cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
 grid = m.suggest_grid(cell, lam0, 900e-9, 1200e-9, fwhm, box_factor=14)
 
 WAVELENGTHS = [1000e-9, 1015e-9, 1030e-9, 1045e-9, 1060e-9]

@@ -1,4 +1,4 @@
-"""Driver: propagates a Pulse through an MPCCell and records reduced diagnostics after every pass
+"""Driver: propagates a Pulse through an MPC and records reduced diagnostics after every pass
 (cell centre plane). Full 3D fields are only written to disk for the passes you ask for."""
 import os
 import pickle

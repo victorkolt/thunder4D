@@ -6,7 +6,7 @@ thunder4d.cell
 The multipass cell. See :doc:`../overview/overview` for the unfolded picture, the
 eigenmode and the nonlinear mode matching.
 
-.. py:class:: MPCCell(R, d, medium, n_passes, *, mirror_gdd_fs2=0.0, mirror_tod_fs3=0.0, mirror_reflectivity=1.0, mirror_phase=None, mirror_diameter=None)
+.. py:class:: MPC(R, d, medium, n_passes, *, mirror_gdd_fs2=0.0, mirror_tod_fs3=0.0, mirror_reflectivity=1.0, mirror_phase=None, mirror_diameter=None)
 
    Symmetric two-mirror cell.
 
@@ -26,10 +26,13 @@ eigenmode and the nonlinear mode matching.
    **Attributes:** ``R``, ``d``, ``medium``, ``n_passes``, ``g`` (:math:`1 - d/R`),
    ``theta`` (Gouy phase per pass [rad]).
 
-   .. py:classmethod:: herriott(R, N, k, medium, n_passes=None, **kw)
+   .. py:classmethod:: herriott(R, N, k, medium, branch="concentric", n_passes=None, **kw)
 
-      Re-entrant Herriott cell: ``N`` round trips (= spots per mirror),
-      :math:`d = R[1-\cos(\pi k/N)]`. ``n_passes`` defaults to :math:`2N`.
+      Re-entrant Herriott cell that closes on itself after ``N`` passes:
+      :math:`d = R[1+\cos(2\pi k/N)]` (``branch="concentric"``, default) or
+      :math:`d = R[1-\cos(2\pi k/N)]` (``branch="planar"``). The concentric branch requires an even ``N``.
+      ``n_passes`` defaults to ``N`` (one re-entrant cycle); set it to simulate any other
+      number of passes in the same cell.
 
    .. py:method:: linear_mode(lam)
 

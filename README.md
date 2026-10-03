@@ -21,7 +21,7 @@ from thunder4d import diagnostics as dg
 
 # medium and cell
 gas  = m.Material("Ar", pressure_bar=1.0)
-cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=gas)
+cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
 
 # grid sized from the cell
 grid = m.suggest_grid(cell, lambda0=1030e-9, lambda_min=900e-9, lambda_max=1200e-9, pulse_fwhm=200e-15, box_factor=12)

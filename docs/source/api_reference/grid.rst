@@ -122,7 +122,7 @@ suggest_grid
    - **Point counts:** ``Nt`` covers ``time_window_factor`` × the input FWHM; ``Nx`` and
      ``Nt`` are rounded up to fast FFT sizes (:math:`2^a 3^b 5^c`).
 
-   :param cell: :class:`~thunder4d.cell.MPCCell`
+   :param cell: :class:`~thunder4d.cell.MPC`
    :param float pulse_fwhm: input duration [s]
    :param grid_kw: passed to :class:`Grid` (e.g. ``dtype``, ``fft_backend``)
    :returns: :class:`Grid`

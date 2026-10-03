@@ -19,14 +19,14 @@ QUICK = True
 if QUICK:
     lam0, fwhm, energy = 1030e-9, 200e-15, 1.2e-3
     gas = m.Material("Ar", 1.0)
-    cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=gas)          # 20 passes, 54 deg Gouy/pass
+    cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
     lam_min, lam_max = 900e-9, 1200e-9
     box_factor = 14                   # generous: top-hat -> Airy rings / higher-order modes
 else:
     # ---- template: fill with your stage parameters ----
     lam0, fwhm, energy = 1030e-9, 350e-15, 18e-3
     gas = m.Material("Ar", 0.130)
-    cell = m.MPCCell(R=2.0, d=3.6, medium=gas, n_passes=29, mirror_gdd_fs2=-50)
+    cell = m.MPC(R=2.0, d=3.6, medium=gas, n_passes=29, mirror_gdd_fs2=-50)
     lam_min, lam_max = 920e-9, 1160e-9
     box_factor = 12
 

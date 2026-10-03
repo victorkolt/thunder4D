@@ -9,6 +9,7 @@ A pulse is built as  A(x, y, Om) = E(Om) * U(x, y; Om)  where
     achromatic lens (per-frequency Fraunhofer transform: the physically correct way to get
     a top-hat near field into the cell).
 """
+import math
 import numpy as np
 from .grid import C0
 
@@ -115,6 +116,70 @@ def top_hat(radius, order=24):
     return super_gaussian(radius, order)
 
 
+def _genlaguerre(p, a, u):
+    """Generalised Laguerre polynomial L_p^a(u) (three-term recurrence)."""
+    L0, L1 = np.ones_like(u), 1 + a - u
+    if p == 0:
+        return L0
+    for j in range(1, p):
+        L0, L1 = L1, ((2 * j + 1 + a - u) * L1 - (j + a) * L0) / (j + 1)
+    return L1
+
+
+def _hermite_1d(m, x, w):
+    """Normalised 1D Hermite-Gauss function of order m (int |u|^2 dx = 1), waist w."""
+    xi = np.sqrt(2) * x / w
+    h0 = np.pi ** -0.25 * np.exp(-xi ** 2 / 2)
+    h1 = np.sqrt(2) * xi * h0
+    if m == 0:
+        h1 = h0
+    for j in range(1, m):
+        h0, h1 = h1, np.sqrt(2 / (j + 1)) * xi * h1 - np.sqrt(j / (j + 1)) * h0
+    return h1 * np.sqrt(np.sqrt(2) / w)
+
+
+def hermite_gauss(w, m, n):
+    """HG_mn field of waist w (HG_00 = gaussian(w)), normalised to unit power."""
+    f = lambda X, Y: _hermite_1d(m, X, w) * _hermite_1d(n, Y, w)
+    return Profile(f, w * np.sqrt(max(m, n) + 1), f"HG{m}{n} w={w*1e3:.3g} mm")
+
+
+def laguerre_gauss(w, p=0, l=0, kind="exp"):
+    """LG_pl field of waist w (LG_00 = gaussian(w)), normalised to unit power.
+    kind: 'exp' -> exp(i l phi) (vortex, donut intensity), 'cos' / 'sin' -> real petal modes
+    sqrt(2) cos(l phi) / sqrt(2) sin(l phi)."""
+    a = abs(l)
+    C = np.sqrt(2 * math.factorial(p) / (np.pi * math.factorial(p + a))) / w
+
+    def f(X, Y):
+        X, Y = np.broadcast_arrays(X, Y)
+        u = 2 * (X ** 2 + Y ** 2) / w ** 2
+        phi = np.arctan2(Y, X)
+        R = C * u ** (a / 2) * _genlaguerre(p, a, u) * np.exp(-u / 2)
+        if kind == "exp":
+            return R * np.exp(1j * l * phi)
+        if l == 0:
+            return R.astype(complex)
+        ang = np.cos(l * phi) if kind == "cos" else np.sin(l * phi)
+        return (np.sqrt(2) * R * ang).astype(complex)
+
+    if kind not in ("exp", "cos", "sin"):
+        raise ValueError(f"unknown kind {kind!r}: use 'exp', 'cos' or 'sin'")
+    return Profile(f, w * np.sqrt(2 * p + a + 1), f"LG p={p} l={l} ({kind}) w={w*1e3:.3g} mm")
+
+
+def mode_superposition(terms):
+    """Coherent sum of profiles: terms = [(complex amplitude, Profile), ...].
+    With normalised, orthogonal modes, |amplitude|^2 / sum |amplitude|^2 are the power fractions."""
+    terms = [(complex(c), prof) for c, prof in terms]
+
+    def f(X, Y):
+        return sum(c * prof(X, Y) for c, prof in terms)
+
+    name = " + ".join(f"{abs(c):.3g} {prof.name}" for c, prof in terms)
+    return Profile(f, max(prof.radius for _, prof in terms), name)
+
+
 def measured_profile(image, pixel_size, center="centroid", background=0.0):
     """Camera near-field image (rows = y, cols = x) -> amplitude profile (sqrt of intensity).
     Bilinear interpolation, zero outside the image."""
@@ -190,11 +255,20 @@ class Beam:
     radial_gdd_fs2_per_mm2      : GDD varying as r^2 (radial chirp)
     tilt_urad, offset_m         : pointing / position
     custom_phase                : callable (X, Y, Om) -> phase [rad], anything else
+    chromatic_size              : how the profile size varies with wavelength, relative to lambda0:
+                                  None (default) = same size for every colour,
+                                  "eigenmode" = size ~ sqrt(lambda) (mode of the cell, w0^2 ~ lambda),
+                                  "focus" = size ~ lambda (focused / diffraction-limited beam)
     """
+
+    _SIZE_EXPONENT = {None: 0.0, "eigenmode": 0.5, "focus": 1.0}
 
     def __init__(self, profile, zernike=None, pupil_radius=None, spatial_chirp_mm_per_nm=(0.0, 0.0),
                  angular_dispersion_urad_per_nm=(0.0, 0.0), pft_fs_per_mm=(0.0, 0.0), pfc_fs_per_mm2=0.0,
-                 radial_gdd_fs2_per_mm2=0.0, tilt_urad=(0.0, 0.0), offset_m=(0.0, 0.0), custom_phase=None):
+                 radial_gdd_fs2_per_mm2=0.0, tilt_urad=(0.0, 0.0), offset_m=(0.0, 0.0), custom_phase=None,
+                 chromatic_size=None):
+        if chromatic_size not in self._SIZE_EXPONENT:
+            raise ValueError(f"chromatic_size must be None, 'eigenmode' or 'focus', got {chromatic_size!r}")
         self.profile = profile
         self.zernike = zernike or {}
         self.pupil = pupil_radius or profile.radius
@@ -206,6 +280,7 @@ class Beam:
         self.tilt = tilt_urad
         self.off = offset_m
         self.custom = custom_phase
+        self.size_exp = self._SIZE_EXPONENT[chromatic_size]
         self._W = None
 
     def field(self, X, Y, omega, omega0):
@@ -215,7 +290,8 @@ class Beam:
         Om = (omega - omega0) * FS          # rad/fs
         k = omega / C0
         sx, sy = self.sc[0] * 1e-3 * dl_nm, self.sc[1] * 1e-3 * dl_nm
-        U = self.profile(X - self.off[0] - sx, Y - self.off[1] - sy).astype(complex)
+        s = (lam / lam0) ** self.size_exp   # size of this colour relative to lambda0
+        U = self.profile((X - self.off[0] - sx) / s, (Y - self.off[1] - sy) / s).astype(complex)
         Xmm, Ymm = X * 1e3, Y * 1e3
         r2mm = Xmm ** 2 + Ymm ** 2
         ph = (Om * (self.pft[0] * Xmm + self.pft[1] * Ymm)

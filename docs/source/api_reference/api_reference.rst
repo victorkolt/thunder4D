@@ -13,7 +13,7 @@ Everything useful is available at package level:
    m.Pulse, m.Beam, m.gaussian, m.super_gaussian, m.top_hat, m.knife_edge,
    m.measured_profile, m.gaussian_spectrum, m.measured_spectrum,
    m.spectrum_from_temporal_field, m.add_spectral_phase, m.zernike_wavefront
-   m.MPCCell, m.UPPESolver, m.MPCSimulation
+   m.MPC, m.UPPESolver, m.MPCSimulation
 
 .. list-table::
    :header-rows: 1
