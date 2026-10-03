@@ -5,6 +5,7 @@ import pickle
 import time
 import numpy as np
 from . import diagnostics as dg
+from .backend import to_host
 from .solver import UPPESolver
 from .pulse import Pulse
 
@@ -26,6 +27,9 @@ class MPCSimulation:
                      spectral bin) are recorded every pass, together with the global profile:
                      near field (cell centre, cut + projection), far field (angle, cut), mirror (cut)
     profile_axis   : 'x' or 'y'
+
+    history keys include wx, wy (second-moment radius per colour, on sim.lam) and w_peak_x,
+    w_peak_y (the same radius [m] at the spectral peak of the input pulse, one value per pass).
     """
 
     def __init__(self, pulse, cell, *, solver=None, record_every=1, far_field=True, max_order=6,
@@ -34,7 +38,7 @@ class MPCSimulation:
                  **solver_kw):
         self.grid = pulse.grid
         self.cell = cell
-        self.Aw = pulse.Aw.copy()
+        self.Aw = self.grid.asarray(pulse.Aw).copy()      # lives on the grid's device
         self.solver = solver or UPPESolver(self.grid, cell.medium, **solver_kw)
         self.record_every, self.far, self.max_order = record_every, far_field, max_order
         self.save_fields, self.save_dir = set(save_fields), save_dir
@@ -51,9 +55,10 @@ class MPCSimulation:
         self.history = {k: [] for k in (
             "pass", "energy", "B", "peak_power", "spectrum", "fluence", "fluence_mirror",
             "sgram_x", "sgram_theta", "eta00", "eta00_total", "order_frac", "V_near", "V_far",
-            "wx", "wy", "M2x", "M2y", "M2x_mean", "M2y_mean", "wall_s",
+            "wx", "wy", "w_peak_x", "w_peak_y", "M2x", "M2y", "M2x_mean", "M2y_mean", "wall_s",
             "prof_near", "prof_near_proj", "prof_far", "prof_mirror", "band_energy")}
         self._t0 = time.time()
+        self._peak_lam = None   # colour tracked by w_peak_*: spectral peak of the input pulse
         self.record(0)
 
     # ------------------------------------------------------------ recording
@@ -62,7 +67,9 @@ class MPCSimulation:
         return pr.astype(np.float32)
 
     def record(self, p, mirror_fluence=None, mirror_profiles=None):
-        g, A, h = self.grid, self.Aw, self.history
+        g, h = self.grid, self.history
+        Ad = self.Aw                  # device array (GPU or CPU)
+        A = to_host(Ad)               # one host copy per record, shared by all diagnostics
         if self.prof_lams:
             xc, pr, en = dg.profiles_1d(g, A, self.prof_lams, self.prof_bw, self.prof_axis, "cut")
             _, prj, _ = dg.profiles_1d(g, A, self.prof_lams, self.prof_bw, self.prof_axis, "integrated")
@@ -78,9 +85,9 @@ class MPCSimulation:
             for k in ("prof_near", "prof_near_proj", "band_energy", "prof_mirror", "prof_far"):
                 h[k].append(None)
         h["pass"].append(p)
-        h["energy"].append(g.energy(A))
+        h["energy"].append(g.energy(Ad))
         h["B"].append(self.solver.B)
-        h["peak_power"].append(Pulse(g, A).peak_power())
+        h["peak_power"].append(Pulse(g, Ad).peak_power())
         lam, S = dg.total_spectrum(g, A)
         h["spectrum"].append(S)
         h["fluence"].append(dg.fluence(g, A).astype(np.float32))
@@ -95,6 +102,10 @@ class MPCSimulation:
         bm = dg.beam_moments(g, A)
         for k in ("wx", "wy", "M2x", "M2y"):
             h[k].append(np.interp(lam, bm["lam"], bm[k], left=np.nan, right=np.nan))
+        if self._peak_lam is None:
+            self._peak_lam = lam[np.nanargmax(S)]
+        for k in ("wx", "wy"):
+            h["w_peak_" + k[1]].append(float(np.interp(self._peak_lam, bm["lam"], bm[k])))
         h["M2x_mean"].append(bm["M2x_mean"])
         h["M2y_mean"].append(bm["M2y_mean"])
         if self.far:
@@ -148,7 +159,7 @@ class MPCSimulation:
     # ------------------------------------------------------------ checkpoints (long runs)
     def checkpoint(self, path):
         """Save the full state so a long run can be resumed (sim.resume(path))."""
-        st = {"Aw": self.Aw, "history": self.history, "passes_done": self.passes_done,
+        st = {"Aw": to_host(self.Aw), "history": self.history, "passes_done": self.passes_done,
               "B": self.solver.B, "nsteps": self.solver.nsteps, "z": self.solver.z,
               "Ipeak": self.solver._Ipeak}
         with open(path, "wb") as f:
@@ -157,7 +168,7 @@ class MPCSimulation:
     def resume(self, path):
         with open(path, "rb") as f:
             st = pickle.load(f)
-        self.Aw = st["Aw"]
+        self.Aw = self.grid.asarray(st["Aw"])
         self.history = st["history"]
         self.passes_done = st["passes_done"]
         self.solver.B, self.solver.nsteps, self.solver.z = st["B"], st["nsteps"], st["z"]
@@ -193,5 +204,5 @@ class MPCSimulation:
         if fm:
             out["fluence_mirror"] = np.array(fm)
         if include_field:
-            out["Aw_final"] = self.Aw
+            out["Aw_final"] = to_host(self.Aw)
         np.savez_compressed(path, **out)

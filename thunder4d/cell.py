@@ -133,7 +133,7 @@ class MPC:
         if self.diameter is not None:
             ap = np.exp(-(np.sqrt(grid.r2) / (self.diameter / 2)) ** 30)
             F *= ap[:, :, None]
-        F = F.astype(grid.dtype)
+        F = grid.asarray(F.astype(grid.dtype))     # built on the host, stored on the grid's device
         self._bounce_cache = (grid, F)
         return F
 

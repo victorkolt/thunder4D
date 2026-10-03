@@ -11,7 +11,9 @@ Requirements
   as a fallback if SciPy is missing
 - Matplotlib (only for the example scripts)
 
-No GPU and no compiled extension are needed.
+No GPU and no compiled extension are needed. For an NVIDIA GPU, install CuPy
+(``pip install cupy-cuda12x``; RTX 50-series cards need CUDA 12.8 or newer): grids created with
+``device="auto"`` (the default) then run on the GPU, see :func:`thunder4d.gpu_available`.
 
 Installing with pip
 -------------------

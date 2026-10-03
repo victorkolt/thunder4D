@@ -118,6 +118,9 @@ quantities are interpolated on ``sim.lam``.
    * - ``wx``, ``wy``, ``M2x``, ``M2y``
      - (Nλ,)
      - second-moment radii and :math:`M^2` vs wavelength
+   * - ``w_peak_x``, ``w_peak_y``
+     - scalar
+     - second-moment radius [m] at the spectral peak of the input pulse (same colour every pass)
    * - ``M2x_mean``, ``M2y_mean``
      - scalar
      - spectrally weighted :math:`M^2`

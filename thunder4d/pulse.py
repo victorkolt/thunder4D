@@ -55,7 +55,7 @@ def spectrum_from_temporal_field(grid, t_fs, field):
     o = np.argsort(t)
     At = (np.interp(grid.t, t[o], f[o].real, left=0, right=0)
           + 1j * np.interp(grid.t, t[o], f[o].imag, left=0, right=0))
-    return grid.fft.ft_t(At) * grid.valid
+    return grid.hfft.ft_t(At) * grid.valid          # spectra are host arrays
 
 
 def add_spectral_phase(grid, E, gdd_fs2=0.0, tod_fs3=0.0, fod_fs4=0.0, delay_fs=0.0, phase=None):
@@ -312,7 +312,7 @@ class Pulse:
 
     def __init__(self, grid, Aw):
         self.grid = grid
-        self.Aw = np.asarray(Aw, dtype=grid.dtype)
+        self.Aw = grid.asarray(Aw, dtype=grid.dtype)     # on the grid's device (GPU or CPU)
 
     # ---------------------------------------------------------------- builders
     @staticmethod
@@ -393,7 +393,7 @@ class Pulse:
             Aw[:, :, j] = E[j] * U
         lin = UPPESolver(grid, cell.medium)
         lin._cache.clear()
-        Aw = lin.linear(Aw, -z)
+        Aw = lin.linear(grid.asarray(Aw), -z)
         del lin
         p = cls(grid, Aw)
         frac = grid.energy(p.Aw)
@@ -463,7 +463,7 @@ class Pulse:
 
     def add_spectral_phase(self, **kw):
         E1 = add_spectral_phase(self.grid, np.ones(self.grid.Nt, complex), **kw)
-        self.Aw *= E1.astype(self.grid.dtype)[None, None, :]
+        self.Aw *= self.grid.asarray(E1.astype(self.grid.dtype)[None, None, :])
         return self
 
     def copy(self):

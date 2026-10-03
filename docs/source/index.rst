@@ -25,7 +25,7 @@ Main features:
 - per-pass diagnostics: spatio-spectral traces :math:`S(x,\lambda)` and
   :math:`S(\theta,\lambda)`, Hermite–Gauss content, homogeneity, :math:`M^2`,
   wavelength-resolved beam profiles, compression,
-- pure Python: NumPy (+ SciPy FFT if available), no GPU, resumable long runs.
+- pure Python: NumPy (+ SciPy FFT if available), optional GPU through CuPy, resumable long runs.
 
 .. figure:: _static/figures/clipped_far_field_log.png
    :width: 100%

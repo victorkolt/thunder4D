@@ -11,7 +11,7 @@ Full documentation: `https://victorkolt.github.io/thunder4D/`.
 - time-dependent nonlinear mode mismatch,
 - influence of space-time couplings (spatial chirp, pulse-front tilt, …) on the output.
 
-The code is pure Python. NumPy (≥ 2.0) is required. SciPy is optional but strongly recommended, because `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. No GPU is used.
+The code is pure Python. NumPy (≥ 2.0) is required. SciPy is optional but strongly recommended, because `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. An NVIDIA GPU is optional: with CuPy installed (`pip install cupy-cuda12x`), `suggest_grid(..., device="auto")` (the default) runs the propagation on the GPU, and `device="cpu"` / `"gpu"` force one or the other. `thunder4d.gpu_available()` tells you whether CuPy works; `thunder4d.to_host(array)` converts a device array to NumPy. Everything returned by `thunder4d.diagnostics` is a NumPy array on either device.
 
 ## Quick start
 

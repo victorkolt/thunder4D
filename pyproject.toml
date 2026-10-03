@@ -25,6 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 examples = ["matplotlib"]
+gpu = ["cupy-cuda12x"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]

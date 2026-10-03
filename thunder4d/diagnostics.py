@@ -7,18 +7,21 @@ far field   = angular spectrum on a common angle grid theta (what you see after 
 """
 import numpy as np
 from .grid import C0
+from .backend import to_host
 
 FS = 1e-15
 
 
 # ------------------------------------------------------------------ basic quantities
 def spectral_support(grid, Aw, rel=1e-4):
+    Aw = to_host(Aw)
     S = np.sum(np.abs(Aw) ** 2, axis=(0, 1))
     return np.nonzero((S > rel * S.max()) & grid.valid)[0]
 
 
 def total_spectrum(grid, Aw, per_lambda=True):
     """Spatially integrated spectrum, sorted by wavelength. Returns (lam [m], S)."""
+    Aw = to_host(Aw)
     S = np.sum(np.abs(Aw) ** 2, axis=(0, 1)) * grid.dA * grid.dt / grid.Nt
     return _to_lambda(grid, S, per_lambda)
 
@@ -38,13 +41,14 @@ def _to_lambda(grid, S_w, per_lambda=True, axis=-1):
 
 def fluence(grid, Aw):
     """F(x, y) [J/m^2], sorted."""
+    Aw = to_host(Aw)
     F = np.sum(np.abs(Aw) ** 2, axis=2) * grid.dt / grid.Nt
     return grid.shift_xy(F)
 
 
 def temporal_power(grid, Aw):
     """P(t) [W], sorted time axis."""
-    A = grid.fft.ift_t(Aw)
+    A = grid.hfft.ift_t(to_host(Aw))
     return grid.ts, grid.shift_w(np.sum(np.abs(A) ** 2, axis=(0, 1)) * grid.dA)
 
 
@@ -54,6 +58,7 @@ def far_field(grid, Aw, theta_max=None, n_theta=None, idx=None, theta_y=None):
     theta = 0 is sampled). theta_max default: half the largest kx at lambda0.
     theta_y: optional explicit theta_y values (e.g. [0.] for a single line).
     Returns (theta_x, Ef) with Ef of shape (n_theta, len(theta_y), Nt), FFT order along Om."""
+    Aw = to_host(Aw)
     n_theta = n_theta or (grid.Nx // 2) * 2 + 1
     if theta_max is None:
         theta_max = 0.5 * np.abs(grid.kx).max() / (grid.omega0 / C0)
@@ -74,6 +79,7 @@ def spectrogram_x_lambda(grid, Aw, y0=0.0, slit=None, axis="x", per_lambda=True)
     """Spatio-spectral trace S(x, lambda) along a line (imaging spectrometer).
     slit : width [m] integrated around y0 (None = single row). axis 'x' or 'y'.
     Returns (x_sorted [m], lam [m], S[x, lam])."""
+    Aw = to_host(Aw)
     if axis == "y":
         Aw = np.swapaxes(Aw, 0, 1)
         coord, other, d = grid.y, grid.x, grid.dx
@@ -101,7 +107,7 @@ def spectrogram_theta_lambda(grid, Aw, theta_max=None, n_theta=None, per_lambda=
 def homogeneity(grid, Aw=None, S_xyw=None, rel=1e-3):
     """Spectral homogeneity V(x, y) = (sum sqrt(S S0))^2 / (sum S sum S0), S0 = total spectrum,
     and its fluence-weighted mean. Pass either a field or an intensity cube S_xyw."""
-    S = (np.abs(Aw) ** 2 if S_xyw is None else S_xyw).astype(np.float64)
+    S = (np.abs(to_host(Aw)) ** 2 if S_xyw is None else S_xyw).astype(np.float64)
     S = S / S.max()
     S0 = S.sum(axis=(0, 1))
     num = np.sum(np.sqrt(S * S0[None, None, :]), axis=2) ** 2
@@ -129,6 +135,7 @@ def mode_content(grid, Aw, w0_of_lambda, max_order=6, idx=None):
     """Decomposition on Hermite-Gauss modes of waist w0(lambda) with flat phase (cell centre).
     Returns dict: lam, eta00(lam) (fundamental fraction per colour), order_frac[N] (energy fraction
     in modes of order m+n = N, spectrally integrated, last bin = everything above max_order)."""
+    Aw = to_host(Aw)
     idx = spectral_support(grid, Aw, 1e-3) if idx is None else idx
     lam = grid.lam[idx]
     M = max_order
@@ -151,9 +158,32 @@ def mode_content(grid, Aw, w0_of_lambda, max_order=6, idx=None):
             "eta00_total": float(np.sum(eta * P) / P.sum())}
 
 
+def lg_mode_content(grid, Aw, w0_of_lambda, p_max=2, l_max=2, idx=None):
+    """Decomposition on Laguerre-Gauss modes LG_pl (exp(i l phi) convention, waist w0(lambda), flat
+    phase, cell centre), spectrally integrated.
+    Returns dict: p = 0..p_max, l = -l_max..l_max, frac[p, l] (fraction of the total energy in each
+    mode, shape (p_max+1, 2*l_max+1)) and residual (energy outside the listed modes)."""
+    from .pulse import laguerre_gauss
+    Aw = to_host(Aw)
+    idx = spectral_support(grid, Aw, 1e-3) if idx is None else idx
+    lam = grid.lam[idx]
+    ps, ls = np.arange(p_max + 1), np.arange(-l_max, l_max + 1)
+    P = np.sum(np.abs(Aw[:, :, idx]) ** 2, axis=(0, 1)) * grid.dA
+    E = np.zeros((len(ps), len(ls)))
+    for n, j in enumerate(idx):
+        w = w0_of_lambda(lam[n])
+        for a, p in enumerate(ps):
+            for b, l in enumerate(ls):
+                u = laguerre_gauss(w, int(p), int(l))(grid.X, grid.Y)
+                E[a, b] += np.abs(np.sum(np.conj(u) * Aw[:, :, j]) * grid.dA) ** 2
+    frac = E / P.sum()
+    return {"p": ps, "l": ls, "frac": frac, "residual": max(1.0 - float(frac.sum()), 0.0)}
+
+
 # ------------------------------------------------------------------ beam size / M2
 def beam_moments(grid, Aw, idx=None):
     """Per colour: second-moment diameters/2 (wx, wy) [m] and M2x, M2y. Sorted by wavelength."""
+    Aw = to_host(Aw)
     idx = spectral_support(grid, Aw, 1e-3) if idx is None else idx
     E = Aw[:, :, idx].astype(np.complex128)
     E /= np.abs(E).max()
@@ -204,6 +234,7 @@ def compress(grid, Aw, gdd_bounds_fs2=(-30000, 30000), tod_fs3=0.0, n_scan=61, r
     power: coarse scan over gdd_bounds_fs2 then golden-section refinement.
     Returns dict with gdd_fs2, t_fs, P(t) [W] (compressed), FWHM, transform-limited FWHM,
     peak power and peak power of the (spatially resolved) transform limit."""
+    Aw = to_host(Aw)
     F = np.sum(np.abs(Aw) ** 2, axis=2)
     mask = F > rel * F.max()
     E = Aw[mask]                                   # (npix, Nt)
@@ -211,7 +242,7 @@ def compress(grid, Aw, gdd_bounds_fs2=(-30000, 30000), tod_fs3=0.0, n_scan=61, r
 
     def P_of(gdd):
         ph = np.exp(1j * (gdd / 2 * W ** 2 + tod_fs3 / 6 * W ** 3)).astype(E.dtype)
-        A = grid.fft.ift_t(E * ph[None, :])
+        A = grid.hfft.ift_t(E * ph[None, :])
         return np.sum(np.abs(A).astype(np.float64) ** 2, axis=0) * grid.dA
 
     scan = np.linspace(*gdd_bounds_fs2, n_scan)
@@ -234,7 +265,7 @@ def compress(grid, Aw, gdd_bounds_fs2=(-30000, 30000), tod_fs3=0.0, n_scan=61, r
     P = np.fft.fftshift(P_of(g))
     t = grid.ts / FS
     Etl = np.abs(E).astype(np.float64)             # flat phase in every pixel
-    Ptl = np.fft.fftshift(np.sum(np.abs(grid.fft.ift_t(Etl)) ** 2, axis=0) * grid.dA)
+    Ptl = np.fft.fftshift(np.sum(np.abs(grid.hfft.ift_t(Etl)) ** 2, axis=0) * grid.dA)
     return {"gdd_fs2": g, "t_fs": t, "P": P, "fwhm_fs": _fwhm(t, P), "tl_fwhm_fs": _fwhm(t, Ptl),
             "peak_power": float(P.max()), "peak_power_TL": float(Ptl.max()),
             "gdd_scan_fs2": scan, "peak_scan": np.array(pk)}
@@ -243,6 +274,7 @@ def compress(grid, Aw, gdd_bounds_fs2=(-30000, 30000), tod_fs3=0.0, n_scan=61, r
 def local_gdd_map(grid, Aw, rel_fluence=1e-2, rel_spectrum=1e-2):
     """Pixel-wise GDD [fs^2] from a weighted quadratic fit of the spectral phase
     (radial chirp map). Returns sorted GDD(x, y) with NaN outside the beam."""
+    Aw = to_host(Aw)
     F = np.sum(np.abs(Aw) ** 2, axis=2)
     S0 = np.sum(np.abs(Aw) ** 2, axis=(0, 1))
     idx = np.nonzero((S0 > rel_spectrum * S0.max()) & grid.valid)[0]
@@ -295,7 +327,7 @@ def profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, axis="x", mode="cut"):
     Returns (coord_sorted [m], profiles[n_lambda + 1, N] (last row = global, not normalised),
              band_energy[n_lambda + 1] (J, fraction of the pulse in each band; last = total)).
     """
-    I = None
+    Aw = to_host(Aw)
     A = Aw if axis == "x" else np.swapaxes(Aw, 0, 1)
     coord = grid.x if axis == "x" else grid.y
     d_other = grid.dy if axis == "x" else grid.dx

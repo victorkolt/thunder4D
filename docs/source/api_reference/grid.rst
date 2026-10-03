@@ -12,7 +12,7 @@ Simulation grid and FFT conventions (see :doc:`../overview/conventions`).
 Grid
 ----
 
-.. py:class:: Grid(Nx, dx, Nt, lambda0, *, dt=None, lambda_min=None, lambda_max=None, Ny=None, dy=None, dtype=np.complex64, fft_backend="auto", workers=None)
+.. py:class:: Grid(Nx, dx, Nt, lambda0, *, dt=None, lambda_min=None, lambda_max=None, Ny=None, dy=None, dtype=np.complex64, fft_backend="auto", workers=None, device="auto")
 
    :math:`(x, y, t)` grid centred on :math:`\lambda_0`.
 
@@ -24,6 +24,9 @@ Grid
    :param float dt: time step [s]. Alternatively give ``lambda_min`` (and optionally
       ``lambda_max``) and ``dt`` is chosen so the spectral window covers them.
    :param dtype: ``np.complex64`` (default, half the memory) or ``np.complex128``
+   :param str device: ``"auto"`` (GPU if CuPy and a CUDA device work, else CPU), ``"cpu"`` or
+      ``"gpu"`` (raises if no GPU is usable). The field, propagators and mirror transfer function live
+      on that device (``grid.device``, ``grid.xp``); axes such as ``grid.x`` and ``grid.lam`` stay NumPy.
    :param str fft_backend: ``"auto"`` (SciPy if installed, else NumPy), ``"scipy"`` or
       ``"numpy"``
    :param int workers: threads for the SciPy backend (default: all cores)
@@ -124,10 +127,24 @@ suggest_grid
 
    :param cell: :class:`~thunder4d.cell.MPC`
    :param float pulse_fwhm: input duration [s]
-   :param grid_kw: passed to :class:`Grid` (e.g. ``dtype``, ``fft_backend``)
+   :param grid_kw: passed to :class:`Grid` (e.g. ``dtype``, ``fft_backend``, ``device``)
    :returns: :class:`Grid`
 
    .. tip::
 
       Use ``box_factor`` ≥ 12–14 for top-hat, clipped or aberrated inputs: their
       higher-order content is much wider than the fundamental mode.
+
+
+GPU helpers
+-----------
+
+.. py:function:: gpu_available()
+
+   ``True`` if CuPy is installed and a CUDA device can run a kernel and an FFT (checked once).
+
+.. py:function:: to_host(a)
+
+   NumPy array from an array that may live on the GPU (no copy for NumPy input). The field
+   ``sim.Aw`` and ``Pulse.Aw`` are device arrays on a GPU grid; the diagnostics accept either and
+   always return NumPy arrays (they copy the field to the host once per call).

@@ -119,6 +119,13 @@ Modal content
 Beam size and beam quality
 --------------------------
 
+.. py:function:: lg_mode_content(grid, Aw, w0_of_lambda, p_max=2, l_max=2, idx=None)
+
+   Decomposition on Laguerre-Gauss modes :math:`\mathrm{LG}_{pl}` (:math:`e^{il\varphi}` convention,
+   waist ``w0_of_lambda(lam)``, flat phase), spectrally integrated. Returns ``p``
+   (:math:`0..p_{max}`), ``l`` (:math:`-l_{max}..l_{max}`), ``frac[p, l]`` (fraction of the total
+   energy per mode) and ``residual`` (energy outside the listed modes).
+
 .. py:function:: beam_moments(grid, Aw, idx=None)
 
    Per wavelength: second-moment radii ``wx``, ``wy`` [m] and ``M2x``, ``M2y`` from the
