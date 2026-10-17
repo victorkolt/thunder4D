@@ -52,8 +52,8 @@ h = sim.history
 P = np.array(h["pass"])
 x = sim.prof_coord * 1e6                      # um
 th = sim.theta * 1e3                          # mrad
-near = np.array(h["prof_near"])               # (npass, nlam+1, Nx)
-far = np.array(h["prof_far"])
+far = np.array(h["prof_far"])                 # cell centre = far field: (npass, nlam+1, Nx)
+near = np.array(h["prof_near"])               # collimated beam = near field, vs angle
 mir = np.array([v for v in h["prof_mirror"] if v is not None])   # passes 1..N
 band = np.array(h["band_energy"])             # (npass, nlam+1)
 labels = [f"{l*1e9:.0f} nm" for l in WAVELENGTHS] + ["global"]
@@ -68,8 +68,8 @@ def norm_rows(a):
 
 
 for tag, data, coord, lim, xl, passes in (
-        ("near_field_centre", near, x, lim_x, "x (um)", P),
-        ("far_field", far, th, lim_th, "theta (mrad)", P),
+        ("far_field_centre", far, x, lim_x, "x (um)", P),
+        ("near_field", near, th, lim_th, "theta (mrad)", P),
         ("mirror_plane", mir, x, 1.6 * lim_x, "x (um)", P[1:])):
     n = data.shape[1]
     # (1) maps: profile (normalised per pass) vs pass
@@ -104,10 +104,10 @@ for tag, data, coord, lim, xl, passes in (
     fig.savefig(f"out_profiles_{INJECTION}/lines_{tag}.png", dpi=130)
     plt.close("all")
 
-# rms widths vs pass for each colour (near field cut) + fraction of energy in each band
+# rms widths vs pass for each colour (far field cut, cell centre) + fraction of energy in each band
 fig, axs = plt.subplots(1, 2, figsize=(10, 3.6), constrained_layout=True)
 for i, lab in enumerate(labels):
-    d = near[:, i, :].astype(float)
+    d = far[:, i, :].astype(float)
     w = 2 * np.sqrt((d * x ** 2).sum(1) / d.sum(1))
     if i < len(WAVELENGTHS):
         w[~ok[:, i]] = np.nan

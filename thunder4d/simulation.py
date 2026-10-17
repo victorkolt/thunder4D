@@ -17,7 +17,8 @@ class MPCSimulation:
     sim.history["eta00"]           # per pass, etc.  sim.save("run.npz")
 
     record_every   : record diagnostics every n passes (pass 0 = input is always recorded)
-    far_field      : also record the angle-resolved spectrogram and far-field homogeneity
+    near_field     : also record the angle-resolved spectrogram, profiles and homogeneity of the
+                     collimated beam (near field)
                      (per-colour matrix Fourier transforms: costs some seconds per record)
     mode_reference : 'linear' -> HG basis of the linear eigenmode w0(lambda);
                      or a float w0 at lambda0 (e.g. the matched waist), scaled as sqrt(lambda)
@@ -25,14 +26,23 @@ class MPCSimulation:
     record_mirror  : also keep the fluence at the mirror plane (before bounce)
     profile_wavelengths : wavelengths [m] whose 1D profiles (bandpass `profile_bandwidth`, 0 = one
                      spectral bin) are recorded every pass, together with the global profile:
-                     near field (cell centre, cut + projection), far field (angle, cut), mirror (cut)
+                     far field (cell centre, cut + projection), near field (collimated beam: angle,
+                     cut), mirror (cut)
     profile_axis   : 'x' or 'y'
+
+    Conventions: FAR FIELD = the cell centre (focus / waist plane, where the field is recorded);
+    NEAR FIELD = the collimated beam, i.e. the angular spectrum of the cell-centre field
+    (x_out = f * theta after a collimating lens of focal length f).
+
+    Conventions: FAR FIELD = the cell centre (focus / waist plane, where the field is recorded);
+    NEAR FIELD = the collimated beam, i.e. the angular spectrum of the cell-centre field
+    (x_out = f * theta after a collimating lens of focal length f).
 
     history keys include wx, wy (second-moment radius per colour, on sim.lam) and w_peak_x,
     w_peak_y (the same radius [m] at the spectral peak of the input pulse, one value per pass).
     """
 
-    def __init__(self, pulse, cell, *, solver=None, record_every=1, far_field=True, max_order=6,
+    def __init__(self, pulse, cell, *, solver=None, record_every=1, near_field=True, max_order=6,
                  mode_reference="linear", save_fields=(), save_dir=".", record_mirror=True,
                  slit=None, profile_wavelengths=(), profile_bandwidth=0.0, profile_axis="x",
                  **solver_kw):
@@ -40,7 +50,7 @@ class MPCSimulation:
         self.cell = cell
         self.Aw = self.grid.asarray(pulse.Aw).copy()      # lives on the grid's device
         self.solver = solver or UPPESolver(self.grid, cell.medium, **solver_kw)
-        self.record_every, self.far, self.max_order = record_every, far_field, max_order
+        self.record_every, self.near, self.max_order = record_every, near_field, max_order
         self.save_fields, self.save_dir = set(save_fields), save_dir
         self.record_mirror, self.slit = record_mirror, slit
         self.prof_lams = list(profile_wavelengths)
@@ -56,7 +66,7 @@ class MPCSimulation:
             "pass", "energy", "B", "peak_power", "spectrum", "fluence", "fluence_mirror",
             "sgram_x", "sgram_theta", "eta00", "eta00_total", "order_frac", "V_near", "V_far",
             "wx", "wy", "w_peak_x", "w_peak_y", "M2x", "M2y", "M2x_mean", "M2y_mean", "wall_s",
-            "prof_near", "prof_near_proj", "prof_far", "prof_mirror", "band_energy")}
+            "prof_far", "prof_far_proj", "prof_near", "prof_mirror", "band_energy")}
         self._t0 = time.time()
         self._peak_lam = None   # colour tracked by w_peak_*: spectral peak of the input pulse
         self.record(0)
@@ -73,16 +83,16 @@ class MPCSimulation:
         if self.prof_lams:
             xc, pr, en = dg.profiles_1d(g, A, self.prof_lams, self.prof_bw, self.prof_axis, "cut")
             _, prj, _ = dg.profiles_1d(g, A, self.prof_lams, self.prof_bw, self.prof_axis, "integrated")
-            h["prof_near"].append(pr.astype(np.float32))
-            h["prof_near_proj"].append(prj.astype(np.float32))
+            h["prof_far"].append(pr.astype(np.float32))            # cell centre = far field
+            h["prof_far_proj"].append(prj.astype(np.float32))
             h["band_energy"].append(en)
             h["prof_mirror"].append(mirror_profiles)
-            if self.far:
-                th, pf = dg.far_profiles_1d(g, A, self.prof_lams, self.prof_bw)
-                h["prof_far"].append(pf.astype(np.float32))
+            if self.near:
+                th, pf = dg.near_profiles_1d(g, A, self.prof_lams, self.prof_bw)
+                h["prof_near"].append(pf.astype(np.float32))       # collimated beam = near field
             self.prof_coord = xc
         else:
-            for k in ("prof_near", "prof_near_proj", "band_energy", "prof_mirror", "prof_far"):
+            for k in ("prof_far", "prof_far_proj", "band_energy", "prof_mirror", "prof_near"):
                 h[k].append(None)
         h["pass"].append(p)
         h["energy"].append(g.energy(Ad))
@@ -98,7 +108,7 @@ class MPCSimulation:
         h["eta00"].append(np.interp(lam, mc["lam"], mc["eta00"], left=np.nan, right=np.nan))
         h["eta00_total"].append(mc["eta00_total"])
         h["order_frac"].append(mc["order_frac"])
-        h["V_near"].append(dg.homogeneity(g, A)[1])
+        h["V_far"].append(dg.homogeneity(g, A)[1])            # cell centre = far field
         bm = dg.beam_moments(g, A)
         for k in ("wx", "wy", "M2x", "M2y"):
             h[k].append(np.interp(lam, bm["lam"], bm[k], left=np.nan, right=np.nan))
@@ -108,15 +118,15 @@ class MPCSimulation:
             h["w_peak_" + k[1]].append(float(np.interp(self._peak_lam, bm["lam"], bm[k])))
         h["M2x_mean"].append(bm["M2x_mean"])
         h["M2y_mean"].append(bm["M2y_mean"])
-        if self.far:
+        if self.near:
             th, _, St = dg.spectrogram_theta_lambda(g, A)
             h["sgram_theta"].append(St)
-            _, Ef = dg.far_field(g, A, n_theta=min(g.Nx // 2 * 2 + 1, 129))
-            h["V_far"].append(dg.homogeneity(g, S_xyw=np.abs(Ef) ** 2)[1])
+            _, Ef = dg.near_field(g, A, n_theta=min(g.Nx // 2 * 2 + 1, 129))
+            h["V_near"].append(dg.homogeneity(g, S_xyw=np.abs(Ef) ** 2)[1])    # collimated beam = near field
             self.theta = th
         else:
             h["sgram_theta"].append(None)
-            h["V_far"].append(np.nan)
+            h["V_near"].append(np.nan)
         h["wall_s"].append(time.time() - self._t0)
         self.lam, self.x = lam, x
         if p in self.save_fields:

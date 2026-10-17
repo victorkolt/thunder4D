@@ -43,8 +43,8 @@ During the run, one line is printed per recorded pass:
 
 .. code-block:: text
 
-   pass  10/20 | B =   8.57 rad | E = 1.281 mJ | eta00 = 0.8406 | V_near = 0.9851 |
-   V_far = 0.9849 | M2 = 1.440/1.045 | steps 476 | 214 s
+   pass  10/20 | B =   8.57 rad | E = 1.281 mJ | eta00 = 0.8406 | V_near = 0.9849 |
+   V_far = 0.9851 | M2 = 1.440/1.045 | steps 476 | 214 s
 
 Watch the energy column: see :doc:`advanced/validation`.
 
@@ -133,8 +133,8 @@ and a bandpass width:
                          profile_axis="x")
 
 At every pass, the 1D profiles of each band and the global (spectrally integrated)
-profile are stored at the cell centre (cut and projection), in the far field and at the
-mirror plane. See :ref:`history-keys`.
+profile are stored at the cell centre = far field (cut and projection), in the collimated beam =
+near field and at the mirror plane. See :ref:`history-keys`.
 
 Long simulations
 ----------------

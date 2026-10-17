@@ -5,14 +5,14 @@ thunder4d.simulation
 
 Driver: propagates a pulse through the cell and records diagnostics after every pass.
 
-.. py:class:: MPCSimulation(pulse, cell, *, solver=None, record_every=1, far_field=True, max_order=6, mode_reference="linear", save_fields=(), save_dir=".", record_mirror=True, slit=None, profile_wavelengths=(), profile_bandwidth=0.0, profile_axis="x", **solver_kw)
+.. py:class:: MPCSimulation(pulse, cell, *, solver=None, record_every=1, near_field=True, max_order=6, mode_reference="linear", save_fields=(), save_dir=".", record_mirror=True, slit=None, profile_wavelengths=(), profile_bandwidth=0.0, profile_axis="x", **solver_kw)
 
    :param pulse: input :class:`~thunder4d.pulse.Pulse` (copied), defined at the cell centre
    :param cell: :class:`~thunder4d.cell.MPC`
    :param solver: an existing :class:`~thunder4d.solver.UPPESolver`; otherwise one is
       created with ``**solver_kw`` (e.g. ``phi_max=0.02``)
    :param int record_every: record every n passes (pass 0 and the last pass always)
-   :param bool far_field: also record far-field quantities (a few seconds per record)
+   :param bool near_field: also record the near-field (collimated beam) quantities (a few seconds per record)
    :param int max_order: highest Hermite–Gauss order in the modal decomposition
    :param mode_reference: ``"linear"`` (linear eigenmode :math:`w_0(\lambda)`) or a float
       waist at :math:`\lambda_0` (e.g. the matched ``w0``), scaled as
@@ -112,9 +112,9 @@ quantities are interpolated on ``sim.lam``.
    * - ``order_frac``
      - (max_order+2,)
      - energy fraction per mode order
-   * - ``V_near``, ``V_far``
+   * - ``V_far``, ``V_near``
      - scalar
-     - mean spectral homogeneity at the centre / in the far field
+     - mean spectral homogeneity at the cell centre (far field) / of the collimated beam (near field)
    * - ``wx``, ``wy``, ``M2x``, ``M2y``
      - (Nλ,)
      - second-moment radii and :math:`M^2` vs wavelength
@@ -124,15 +124,15 @@ quantities are interpolated on ``sim.lam``.
    * - ``M2x_mean``, ``M2y_mean``
      - scalar
      - spectrally weighted :math:`M^2`
-   * - ``prof_near``
-     - (nλ+1, Nx)
-     - 1D cuts at the centre (bands + global)
-   * - ``prof_near_proj``
-     - (nλ+1, Nx)
-     - 1D projections at the centre
    * - ``prof_far``
+     - (nλ+1, Nx)
+     - 1D cuts at the cell centre = far field (bands + global)
+   * - ``prof_far_proj``
+     - (nλ+1, Nx)
+     - 1D projections at the cell centre (far field)
+   * - ``prof_near``
      - (nλ+1, Nθ)
-     - far-field 1D cuts
+     - 1D cuts of the collimated beam = near field (angle)
    * - ``prof_mirror``
      - (nλ+1, Nx) or None
      - mirror-plane 1D cuts (None at pass 0)

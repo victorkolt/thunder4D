@@ -1,9 +1,11 @@
 """Diagnostics on a field A(x, y, Om) (FFT order). Outputs are returned SORTED (ascending axes).
 
-near field  = the plane where the field is (cell centre when recorded by MPCSimulation)
-far field   = angular spectrum on a common angle grid theta (what you see after collimating the
-              output with a lens of focal f: x_out = f * theta). Computed with an exact per-colour
-              matrix Fourier transform, so a given theta means the same angle for all colours.
+far field   = the plane where the field is (the cell centre = focus / waist plane when recorded
+              by MPCSimulation)
+near field  = the collimated beam: angular spectrum on a common angle grid theta (what you see after
+              collimating the output with a lens of focal f: x_out = f * theta). Computed with an
+              exact per-colour matrix Fourier transform, so a given theta means the same angle for
+              all colours.
 """
 import numpy as np
 from .grid import C0
@@ -52,9 +54,9 @@ def temporal_power(grid, Aw):
     return grid.ts, grid.shift_w(np.sum(np.abs(A) ** 2, axis=(0, 1)) * grid.dA)
 
 
-# ------------------------------------------------------------------ far field
-def far_field(grid, Aw, theta_max=None, n_theta=None, idx=None, theta_y=None):
-    """Angular spectrum E(theta_x, theta_y, Om) on a common angle grid (sorted, odd size so that
+# ------------------------------------------------------------------ near field (collimated beam)
+def near_field(grid, Aw, theta_max=None, n_theta=None, idx=None, theta_y=None):
+    """Near field (collimated beam): angular spectrum E(theta_x, theta_y, Om) on a common angle grid (sorted, odd size so that
     theta = 0 is sampled). theta_max default: half the largest kx at lambda0.
     theta_y: optional explicit theta_y values (e.g. [0.] for a single line).
     Returns (theta_x, Ef) with Ef of shape (n_theta, len(theta_y), Nt), FFT order along Om."""
@@ -97,7 +99,7 @@ def spectrogram_x_lambda(grid, Aw, y0=0.0, slit=None, axis="x", per_lambda=True)
 def spectrogram_theta_lambda(grid, Aw, theta_max=None, n_theta=None, per_lambda=True):
     """Angle-resolved spectrum S(theta_x, lambda) at theta_y = 0 (output after collimation:
     x_out = f * theta). Returns (theta [rad], lam [m], S[theta, lam])."""
-    th, Ef = far_field(grid, Aw, theta_max, n_theta, theta_y=[0.0])
+    th, Ef = near_field(grid, Aw, theta_max, n_theta, theta_y=[0.0])
     S = np.abs(Ef[:, 0, :]).astype(np.float64) ** 2
     lam, S = _to_lambda(grid, S, per_lambda, axis=1)
     return th, lam, S
@@ -320,7 +322,8 @@ def band_indices(grid, lam_c, bandwidth=0.0):
 
 def profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, axis="x", mode="cut"):
     """1D beam profiles for selected wavelengths (bandpass of width `bandwidth`) + the
-    spectrally integrated ("global") profile, in the plane where the field is.
+    spectrally integrated ("global") profile, in the plane where the field is (the far field
+    when it is recorded at the cell centre).
 
     mode 'cut'        : line through y = 0 (x = 0 if axis='y')
     mode 'integrated' : projection on the axis (like a 1D camera / slit-less lineout)
@@ -348,11 +351,11 @@ def profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, axis="x", mode="cut"):
     return np.fft.fftshift(coord), np.fft.fftshift(np.array(rows), axes=1), np.array(en)
 
 
-def far_profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, theta_max=None, n_theta=None):
-    """Same as profiles_1d (cut through theta_y = 0) in the far field (angle, common for all
-    colours = beam after collimation). Returns (theta [rad], profiles[n_lambda + 1, n_theta])."""
+def near_profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, theta_max=None, n_theta=None):
+    """Same as profiles_1d (cut through theta_y = 0) in the near field (collimated beam: angle,
+    common for all colours). Returns (theta [rad], profiles[n_lambda + 1, n_theta])."""
     idx_all = spectral_support(grid, Aw)
-    th, Ef = far_field(grid, Aw, theta_max, n_theta, idx=idx_all, theta_y=[0.0])
+    th, Ef = near_field(grid, Aw, theta_max, n_theta, idx=idx_all, theta_y=[0.0])
     S = np.abs(Ef[:, 0, :]) ** 2
     rows = [S[:, band_indices(grid, lc, bandwidth)].sum(axis=1) for lc in wavelengths]
     rows.append(S.sum(axis=1))

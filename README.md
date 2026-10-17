@@ -83,7 +83,7 @@ k(ω) = n(ω) ω / c,   ω = ω₀ + Ω,   k₁ = dk/dω at ω₀
 - **Memory:** about 8–10 field arrays: the field, RK4 buffers, the linear operator `D`, up to `cache_size` cached propagators and the cached mirror transfer. One complex64 array is Nx·Ny·Nt·8 bytes, so 256 × 256 × 256 is 134 MB.
 - **Speed-ups:**
   - SciPy backend with all cores (`fft_backend="scipy"`, `workers=-1`, the default with `"auto"`).
-  - `record_every > 1`, or `far_field=False` (far-field diagnostics use per-colour matrix transforms).
+  - `record_every > 1`, or `near_field=False` (near-field diagnostics, i.e. of the collimated beam, use per-colour matrix transforms).
   - Fewer `profile_wavelengths`.
   - A smaller `cache_size` if memory is tight.
 - **Long runs:** use `run(max_seconds=…)` with `checkpoint` / `resume`.
