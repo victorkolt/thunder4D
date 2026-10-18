@@ -4,6 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thunder4d"
+license = "MIT"
+license-files = ["LICENSE"]
 dynamic = ["version"]
 description = "thunder4d: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
 readme = "README.md"
