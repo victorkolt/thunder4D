@@ -1,10 +1,10 @@
-# THUNDER4D
+# thunder4D
 
 **T**ransverse-resolved **H**erriott-cell **U**PPE solver for **N**onlinear **D**ynamics close to **E**xperimental **R**eality, **4D**: a 4D (x, y, z, t) UPPE solver for multipass cells. Python package: `thunder4d`.
 
-Full documentation: `https://victorkolt.github.io/thunder4D/`.
+Full documentation: `https://victorkolt.github.io/thunder4d/`.
 
-`thunder4d` simulates nonlinear pulse propagation in a gas-filled Herriott-type multipass cell (MPC) with full spatial and temporal resolution: the field is A(x, y, t) and it is propagated along z. It is built to study spatial and spatio-spectral effects that 1D or radially symmetric codes cannot capture:
+`thunder4D` simulates nonlinear pulse propagation in a gas-filled Herriott-type multipass cell (MPC) with full spatial and temporal resolution: the field is A(x, y, t) and it is propagated along z. It is built to study spatial and spatio-spectral effects that 1D or radially symmetric codes cannot capture:
 
 - spatial effects in non-Gaussian inputs (clipped, aberrated, high-order beams),
 - spatio-spectral homogeneity, radial chirp,
