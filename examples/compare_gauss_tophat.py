@@ -19,14 +19,14 @@ QUICK = True
 if QUICK:
     lam0, fwhm, energy = 1030e-9, 200e-15, 1.2e-3
     gas = m.Material("Ar", 1.0)
-    cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=gas)          # 20 passes, 54 deg Gouy/pass
+    cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
     lam_min, lam_max = 900e-9, 1200e-9
     box_factor = 14                   # generous: top-hat -> Airy rings / higher-order modes
 else:
     # ---- template: fill with your stage parameters ----
     lam0, fwhm, energy = 1030e-9, 350e-15, 18e-3
     gas = m.Material("Ar", 0.130)
-    cell = m.MPCCell(R=2.0, d=3.6, medium=gas, n_passes=29, mirror_gdd_fs2=-50)
+    cell = m.MPC(R=2.0, d=3.6, medium=gas, n_passes=29, mirror_gdd_fs2=-50)
     lam_min, lam_max = 920e-9, 1160e-9
     box_factor = 12
 
@@ -98,15 +98,15 @@ for name, sim in runs.items():
     h, g = sim.history, sim.grid
     P = np.array(h["pass"])
 
-    # spatio-spectral traces: input / output, near field (cell centre) and far field (angle)
+    # spatio-spectral traces: input / output, far field (cell centre) and near field (collimated, angle)
     fig, axs = plt.subplots(2, 2, figsize=(10, 7), constrained_layout=True)
     lim = 4 * w0 * um
     for col, i in enumerate((0, -1)):
         show_sgram(axs[0, col], sim.x * um, sim.lam, h["sgram_x"][i],
-                   f"{name}: near field S(x, lambda), pass {P[i]}", "x (um)")
+                   f"{name}: far field S(x, lambda), pass {P[i]}", "x (um)")
         axs[0, col].set_ylim(-lim, lim)
         show_sgram(axs[1, col], sim.theta * 1e3, sim.lam, h["sgram_theta"][i],
-                   f"{name}: far field S(theta, lambda), pass {P[i]}", "theta (mrad)")
+                   f"{name}: near field S(theta, lambda), pass {P[i]}", "theta (mrad)")
         axs[1, col].set_ylim(-4 * g.lambda0 / (np.pi * w0) * 1e3, 4 * g.lambda0 / (np.pi * w0) * 1e3)
     fig.savefig(f"{out}/spectrograms.png", dpi=130)
 

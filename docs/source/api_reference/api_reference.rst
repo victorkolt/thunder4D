@@ -8,12 +8,12 @@ Everything useful is available at package level:
    import thunder4d as m
    from thunder4d import diagnostics as dg
 
-   m.Grid, m.suggest_grid, m.C0
+   m.Grid, m.suggest_grid, m.C0, m.gpu_available, m.to_host
    m.Material
    m.Pulse, m.Beam, m.gaussian, m.super_gaussian, m.top_hat, m.knife_edge,
    m.measured_profile, m.gaussian_spectrum, m.measured_spectrum,
    m.spectrum_from_temporal_field, m.add_spectral_phase, m.zernike_wavefront
-   m.MPCCell, m.UPPESolver, m.MPCSimulation
+   m.MPC, m.UPPESolver, m.MPCSimulation
 
 .. list-table::
    :header-rows: 1

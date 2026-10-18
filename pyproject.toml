@@ -1,14 +1,16 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "thunder4d"
+license = "MIT"
+license-files = ["LICENSE"]
 dynamic = ["version"]
-description = "THUNDER4D: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
+description = "thunder4d: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "Your Name", email = "you@example.org" }]
+authors = [{ name = "Victor Koltalo", email = "victor.koltalo@ensta.fr" }]
 keywords = ["UPPE", "multipass cell", "MPC", "nonlinear optics", "ultrafast", "post-compression",
             "Herriott cell", "spatio-temporal", "pulse propagation"]
 classifiers = [
@@ -20,19 +22,20 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=2.0",
-    "scipy>=1.10",      # fast multi-threaded FFTs (numpy.fft is used as a fallback)
+    "scipy>=1.10",
 ]
 
 [project.optional-dependencies]
 examples = ["matplotlib"]
+gpu = ["cupy-cuda12x"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]
-Documentation = "https://victorkolt.github.io/thunder4d/"
-Source = "https://github.com/victorkolt/thunder4d"
+Documentation = "https://victorkolt.github.io/thunder4D/"
+Source = "https://github.com/victorkolt/thunder4D"
 
 [tool.setuptools]
-packages = ["thunder4d"]
+packages = ["src"]
 
 [tool.setuptools.dynamic]
 version = { attr = "thunder4d.__version__" }

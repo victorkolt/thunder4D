@@ -26,10 +26,18 @@ Basic quantities
 
    :returns: ``(t, P)``, spatially integrated power [W]
 
-Far field
----------
+Near field and far field
+------------------------
 
-.. py:function:: far_field(grid, Aw, theta_max=None, n_theta=None, idx=None, theta_y=None)
+.. note::
+
+   **Far field** = the cell centre (focus / waist plane): the plane where the field is stored,
+   so :func:`profiles_1d`, :func:`spectrogram_x_lambda`, ... describe the far field.
+   **Near field** = the collimated beam, i.e. the angular spectrum of the cell-centre field
+   (:math:`x_\text{out} = f\,\theta` after a collimating lens of focal length :math:`f`):
+   :func:`near_field`, :func:`near_profiles_1d` and :func:`spectrogram_theta_lambda`.
+
+.. py:function:: near_field(grid, Aw, theta_max=None, n_theta=None, idx=None, theta_y=None)
 
    Angular spectrum :math:`E(\theta_x, \theta_y, \Omega)` on an angle grid **common to
    all colours**, computed exactly with a per-colour matrix Fourier transform. This is
@@ -80,9 +88,9 @@ Wavelength-resolved profiles
    :returns: ``(coord, profiles[n_lambda+1, N], band_energy[n_lambda+1])``; the last row
       / entry is the global profile / total energy [J]
 
-.. py:function:: far_profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, theta_max=None, n_theta=None)
+.. py:function:: near_profiles_1d(grid, Aw, wavelengths, bandwidth=0.0, theta_max=None, n_theta=None)
 
-   Same in the far field, cut at :math:`\theta_y = 0`.
+   Same in the near field (collimated beam), cut at :math:`\theta_y = 0`.
 
    :returns: ``(theta, profiles[n_lambda+1, n_theta])``
 
@@ -100,7 +108,7 @@ Homogeneity
 
    :math:`V = 1` is perfectly homogeneous. Pixels below ``rel`` × the peak fluence are
    NaN. Instead of a field, an intensity cube ``S_xyw`` can be given, e.g.
-   ``abs(Ef)**2`` from :func:`far_field`, for the far-field homogeneity.
+   ``abs(Ef)**2`` from :func:`near_field`, for the near-field (collimated beam) homogeneity.
 
    :returns: ``(V_map, V_mean)``, ``V_mean`` fluence-weighted
 
@@ -118,6 +126,13 @@ Modal content
 
 Beam size and beam quality
 --------------------------
+
+.. py:function:: lg_mode_content(grid, Aw, w0_of_lambda, p_max=2, l_max=2, idx=None)
+
+   Decomposition on Laguerre-Gauss modes :math:`\mathrm{LG}_{pl}` (:math:`e^{il\varphi}` convention,
+   waist ``w0_of_lambda(lam)``, flat phase), spectrally integrated. Returns ``p``
+   (:math:`0..p_{max}`), ``l`` (:math:`-l_{max}..l_{max}`), ``frac[p, l]`` (fraction of the total
+   energy per mode) and ``residual`` (energy outside the listed modes).
 
 .. py:function:: beam_moments(grid, Aw, idx=None)
 
