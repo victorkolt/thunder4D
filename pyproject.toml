@@ -35,7 +35,7 @@ Documentation = "https://victorkolt.github.io/thunder4D/"
 Source = "https://github.com/victorkolt/thunder4D"
 
 [tool.setuptools]
-packages = ["src"]
+packages = ["thunder4d"]
 
 [tool.setuptools.dynamic]
 version = { attr = "src.__version__" }
