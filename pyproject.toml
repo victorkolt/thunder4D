@@ -38,4 +38,4 @@ Source = "https://github.com/victorkolt/thunder4D"
 packages = ["thunder4d"]
 
 [tool.setuptools.dynamic]
-version = { attr = "src.__version__" }
+version = { attr = "thunder4d.__version__" }
