@@ -7,3 +7,4 @@ docs/_build/
 *.pkl
 *.npz
 *.npy
+test.py

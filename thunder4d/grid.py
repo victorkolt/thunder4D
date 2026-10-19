@@ -13,14 +13,20 @@ Conventions (read this once, everything else follows)
 * The solver's home domain is (x, y, Om): complex arrays of shape (Nx, Ny, Nt).
 """
 import numpy as np
+from .backend import resolve_device, get_xp, xp_of
 
 C0 = 299_792_458.0
 
 
 class FFT:
-    """Thin wrapper so the backend can be switched (numpy default, scipy multi-thread optional)."""
+    """Thin wrapper so the backend can be switched (scipy default, numpy, or cupyx on the GPU).
+    The arrays passed in must live on the device of the backend (host for scipy/numpy)."""
 
-    def __init__(self, backend="auto", workers=None):
+    def __init__(self, backend="auto", workers=None, device="cpu"):
+        if device == "gpu":
+            import cupyx.scipy.fft as mod
+            self._kw, self.mod, self.backend = {}, mod, "cupy"
+            return
         if backend == "auto":
             try:
                 import scipy.fft  # noqa: F401  (pocketfft C++: ~8x faster than numpy.fft for 2D)
@@ -75,10 +81,13 @@ class Grid:
     dt     : time step [s]; or give lambda_min (and optionally lambda_max) [m]
              and dt is chosen so that the spectral window covers them.
     dtype  : np.complex64 (default, half the memory) or np.complex128.
+    device : 'auto' (GPU if CuPy works, else CPU), 'cpu' or 'gpu'. The field and the propagators
+             live on that device; the axes (x, lam, ...) are always NumPy arrays.
     """
 
     def __init__(self, Nx, dx, Nt, lambda0, *, dt=None, lambda_min=None, lambda_max=None,
-                 Ny=None, dy=None, dtype=np.complex64, fft_backend="auto", workers=None):
+                 Ny=None, dy=None, dtype=np.complex64, fft_backend="auto", workers=None,
+                 device="auto"):
         self.Nx, self.Ny = int(Nx), int(Ny or Nx)
         self.dx, self.dy = float(dx), float(dy or dx)
         self.Nt = int(Nt)
@@ -105,7 +114,10 @@ class Grid:
 
         self.dtype = np.dtype(dtype)
         self.rdtype = np.float32 if self.dtype == np.complex64 else np.float64
-        self.fft = FFT(fft_backend, workers)
+        self.device = resolve_device(device)
+        self.xp = get_xp(self.device)
+        self.fft = FFT(fft_backend, workers, self.device)
+        self.hfft = self.fft if self.device == "cpu" else FFT(fft_backend, workers, "cpu")  # host arrays
 
     # ------------------------------------------------------------------ helpers
     @property
@@ -128,12 +140,16 @@ class Grid:
     def dA(self):
         return self.dx * self.dy
 
+    def asarray(self, a, dtype=None):
+        """Array on the grid's device (no copy if it is already there)."""
+        return self.xp.asarray(a, dtype=dtype)
+
     def energy(self, Aw):
-        """Energy [J] of a field in the (x, y, Omega) domain."""
-        return float(np.vdot(Aw, Aw).real) * self.dx * self.dy * self.dt / self.Nt
+        """Energy [J] of a field in the (x, y, Omega) domain (host or device array)."""
+        return float(xp_of(Aw).vdot(Aw, Aw).real) * self.dx * self.dy * self.dt / self.Nt
 
     def energy_t(self, At):
-        return float(np.vdot(At, At).real) * self.dx * self.dy * self.dt
+        return float(xp_of(At).vdot(At, At).real) * self.dx * self.dy * self.dt
 
     # sorted axes for display
     xs = property(lambda s: np.fft.fftshift(s.x))
@@ -154,7 +170,7 @@ class Grid:
     def describe(self):
         mem = np.prod(self.shape) * self.dtype.itemsize / 1e6
         lv = self.lam[self.valid]
-        return (f"Grid {self.Nx}x{self.Ny}x{self.Nt} ({mem:.0f} MB per field) | "
+        return (f"Grid {self.Nx}x{self.Ny}x{self.Nt} ({mem:.0f} MB per field, {self.device}/{self.fft.backend}) | "
                 f"box {self.Nx*self.dx*1e3:.2f} x {self.Ny*self.dy*1e3:.2f} mm, dx = {self.dx*1e6:.1f} um | "
                 f"T = {self.Nt*self.dt*1e15:.0f} fs, dt = {self.dt*1e15:.2f} fs | "
                 f"lambda window {lv.min()*1e9:.0f}-{lv.max()*1e9:.0f} nm")

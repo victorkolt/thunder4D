@@ -27,17 +27,19 @@ class UPPESolver:
         self.k1 = float((medium.k(w0 + h) - medium.k(w0 - h)) / (2 * h))
         self.n2 = medium.n2
 
-        KX2 = g.kx[:, None] ** 2 + g.ky[None, :] ** 2
-        self.D = np.empty(g.shape, np.complex64 if g.dtype == np.complex64 else np.complex128)
+        xp = self.xp = g.xp                          # numpy on the CPU, cupy on the GPU
+        KX2 = xp.asarray(g.kx[:, None] ** 2 + g.ky[None, :] ** 2)
+        self.D = xp.empty(g.shape, np.complex64 if g.dtype == np.complex64 else np.complex128)
         for j in range(g.Nt):
             if not g.valid[j]:
                 self.D[:, :, j] = 0
                 continue
+            kj = float(k[j])
             if paraxial:
-                kz = k[j] - KX2 / (2 * k[j])
+                kz = kj - KX2 / (2 * kj)
             else:
-                kz = np.sqrt(k[j] ** 2 - KX2 + 0j)   # evanescent -> +i|.|, decays
-            self.D[:, :, j] = kz - self.k0 - self.k1 * g.Omega[j]
+                kz = xp.sqrt(kj ** 2 - KX2 + 0j)     # evanescent -> +i|.|, decays
+            self.D[:, :, j] = kz - self.k0 - self.k1 * float(g.Omega[j])
         self._cache, self.cache_size = {}, cache_size
 
         n = medium.n(np.where(g.valid, w, w0))
@@ -46,13 +48,13 @@ class UPPESolver:
         # taper the nonlinear source to zero at the edges of the spectral window
         u = np.abs(g.Omega) / np.abs(g.Omega).max()
         gam = gam * np.exp(-(u / 0.95) ** 40) * g.valid
-        self.igamma = (1j * gam).astype(g.dtype)[None, None, :]
+        self.igamma = xp.asarray((1j * gam).astype(g.dtype)[None, None, :])
 
         # soft absorbers applied once per half-pass (not per step)
         ax = lambda v: np.exp(-(np.abs(v) / (absorber_frac * np.abs(v).max())) ** absorber_order)
-        self.absorber_xy = (ax(g.x)[:, None] * ax(g.y)[None, :]).astype(g.rdtype)[:, :, None]
-        self.absorber_w = (ax(g.Omega) * g.valid).astype(g.rdtype)[None, None, :]
-        self.absorber_t = ax(g.t).astype(g.rdtype)[None, None, :]
+        self.absorber_xy = xp.asarray((ax(g.x)[:, None] * ax(g.y)[None, :]).astype(g.rdtype)[:, :, None])
+        self.absorber_w = xp.asarray((ax(g.Omega) * g.valid).astype(g.rdtype)[None, None, :])
+        self.absorber_t = xp.asarray(ax(g.t).astype(g.rdtype)[None, None, :])
 
         self.B = 0.0           # accumulated peak (on-axis) B-integral
         self.nsteps = 0
@@ -73,8 +75,8 @@ class UPPESolver:
         key = float(f"{h:.9e}")
         P = self._cache.pop(key, None)
         if P is None:
-            P = np.multiply(self.D, 1j * h)
-            np.exp(P, out=P)
+            P = self.xp.multiply(self.D, self.D.dtype.type(1j * h))
+            self.xp.exp(P, out=P)
             if self.cache_size > 0 and len(self._cache) >= self.cache_size:
                 self._cache.pop(next(iter(self._cache)))
         if self.cache_size > 0:
@@ -95,9 +97,9 @@ class UPPESolver:
     def _rk4(self, Aw, h):
         k = self.nonlinear(Aw, track=True)
         acc = k.copy()
-        tmp = np.empty_like(Aw)
+        tmp = self.xp.empty_like(Aw)
         for c, wgt in ((0.5, 2.0), (0.5, 2.0), (1.0, 1.0)):
-            np.multiply(k, c * h, out=tmp)
+            self.xp.multiply(k, c * h, out=tmp)
             tmp += Aw
             k = self.nonlinear(tmp)
             if wgt == 2.0:
@@ -116,6 +118,7 @@ class UPPESolver:
     # ------------------------------------------------------------ propagation
     def propagate(self, Aw, L):
         """Propagate over L [m] (Strang: L/2 - N - L/2, consecutive linear halves merged)."""
+        Aw = self.grid.asarray(Aw)
         if self.n2 == 0:
             Aw = self.linear(Aw, L)
             self.z += L

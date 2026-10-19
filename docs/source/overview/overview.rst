@@ -111,9 +111,10 @@ For a symmetric cell with :math:`g = 1 - d/R`, the Gouy phase per pass is
    w_\text{mirror}^2 = \frac{\lambda R}{\pi}\sqrt{\frac{d}{2R-d}},\qquad
    z_R = \frac{\sqrt{d(2R-d)}}{2}.
 
-A Herriott cell with :math:`N` round trips and integer :math:`k` is **re-entrant**
-when :math:`d = R\,[1-\cos(\pi k/N)]`. Each mode :math:`\mathrm{HG}_{mn}` picks up
-:math:`(m+n)\theta` per pass, so after :math:`2N` passes every mode is back in phase.
+A Herriott cell with integers :math:`N` and :math:`k` is **re-entrant** after :math:`N`
+passes when :math:`d = R\,[1\pm\cos(2\pi k/N)]` (``+``: near-concentric, ``-``: near-planar).
+Each mode :math:`\mathrm{HG}_{mn}` picks up :math:`(m+n)\theta` per pass, so after :math:`N`
+passes every mode is back in phase.
 
 .. important::
 

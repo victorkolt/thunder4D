@@ -1,17 +1,17 @@
-# THUNDER4D
+# thunder4D
 
 **T**ransverse-resolved **H**erriott-cell **U**PPE solver for **N**onlinear **D**ynamics close to **E**xperimental **R**eality, **4D**: a 4D (x, y, z, t) UPPE solver for multipass cells. Python package: `thunder4d`.
 
-Full documentation: `https://victorkolt.github.io/thunder4D/`.
+Full documentation: `https://victorkolt.github.io/thunder4d/`.
 
-`thunder4d` simulates nonlinear pulse propagation in a gas-filled Herriott-type multipass cell (MPC) with full spatial and temporal resolution: the field is A(x, y, t) and it is propagated along z. It is built to study spatial and spatio-spectral effects that 1D or radially symmetric codes cannot capture:
+`thunder4D` simulates nonlinear pulse propagation in a gas-filled Herriott-type multipass cell (MPC) with full spatial and temporal resolution: the field is A(x, y, t) and it is propagated along z. It is built to study spatial and spatio-spectral effects that 1D or radially symmetric codes cannot capture:
 
 - spatial effects in non-Gaussian inputs (clipped, aberrated, high-order beams),
 - spatio-spectral homogeneity, radial chirp,
 - time-dependent nonlinear mode mismatch,
 - influence of space-time couplings (spatial chirp, pulse-front tilt, …) on the output.
 
-The code is pure Python. NumPy (≥ 2.0) is required. SciPy is optional but strongly recommended, because `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. No GPU is used.
+The code is pure Python. NumPy (≥ 2.0) is required. SciPy is optional but strongly recommended, because `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. An NVIDIA GPU is optional: with CuPy installed (`pip install cupy-cuda12x`), `suggest_grid(..., device="auto")` (the default) runs the propagation on the GPU, and `device="cpu"` / `"gpu"` force one or the other. `thunder4d.gpu_available()` tells you whether CuPy works; `thunder4d.to_host(array)` converts a device array to NumPy. Everything returned by `thunder4d.diagnostics` is a NumPy array on either device.
 
 ## Quick start
 
@@ -21,7 +21,7 @@ from thunder4d import diagnostics as dg
 
 # medium and cell
 gas  = m.Material("Ar", pressure_bar=1.0)
-cell = m.MPCCell.herriott(R=0.5, N=10, k=3, medium=gas)
+cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
 
 # grid sized from the cell
 grid = m.suggest_grid(cell, lambda0=1030e-9, lambda_min=900e-9, lambda_max=1200e-9, pulse_fwhm=200e-15, box_factor=12)
@@ -83,7 +83,7 @@ k(ω) = n(ω) ω / c,   ω = ω₀ + Ω,   k₁ = dk/dω at ω₀
 - **Memory:** about 8–10 field arrays: the field, RK4 buffers, the linear operator `D`, up to `cache_size` cached propagators and the cached mirror transfer. One complex64 array is Nx·Ny·Nt·8 bytes, so 256 × 256 × 256 is 134 MB.
 - **Speed-ups:**
   - SciPy backend with all cores (`fft_backend="scipy"`, `workers=-1`, the default with `"auto"`).
-  - `record_every > 1`, or `far_field=False` (far-field diagnostics use per-colour matrix transforms).
+  - `record_every > 1`, or `near_field=False` (near-field diagnostics, i.e. of the collimated beam, use per-colour matrix transforms).
   - Fewer `profile_wavelengths`.
   - A smaller `cache_size` if memory is tight.
 - **Long runs:** use `run(max_seconds=…)` with `checkpoint` / `resume`.

@@ -32,15 +32,15 @@ fluence maps; radial GDD; compression.
 .. figure:: ../_static/figures/tophat_spectrograms.png
    :width: 90%
 
-   Top-hat (Fourier injection): spatio-spectral traces at the cell centre and in the
-   far field, input (left) and output (right).
+   Top-hat (Fourier injection): spatio-spectral traces at the cell centre (far field) and in the
+   collimated beam (near field), input (left) and output (right).
 
 Wavelength-resolved profiles of a top-hat
 -----------------------------------------
 
 ``tophat_profiles_vs_pass.py`` records the 1D profiles at 1010, 1030 and 1050 nm and
-the global profile at every pass, at the cell centre, at the mirror and in the far
-field. ``INJECTION = "mirror"`` images the near field on the first mirror;
+the global profile at every pass, at the cell centre (far field), at the mirror and in the collimated
+beam (near field). ``INJECTION = "mirror"`` images the near field on the first mirror;
 ``"fourier"`` puts the Airy pattern at the cell centre.
 
 .. figure:: ../_static/figures/tophat_imaged_mirror_lines.png
@@ -56,7 +56,7 @@ Gaussian with a hard edge
 ``clipped_gauss_profiles.py`` clips a Gaussian with a knife edge at
 :math:`x = +0.5\,w_\text{mirror}` (about 16 % of the beam), images it on the first
 mirror, and records 1D profiles (linear and log scale) at 1000–1060 nm at the centre, at
-the mirror and in the far field, plus :math:`\eta_{00}` of each colour versus pass.
+the mirror and in the collimated beam (near field), plus :math:`\eta_{00}` of each colour versus pass.
 
 .. figure:: ../_static/figures/clipped_mirror.png
    :width: 100%

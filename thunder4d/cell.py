@@ -44,11 +44,23 @@ class MPC:
         self._bounce_cache = None
 
     @classmethod
-    def herriott(cls, R, N, k, medium, n_passes=None, **kw):
-        """Re-entrant Herriott cell: N round trips (= spots per mirror), d = R (1 + cos(pi k/N)).
-        Default n_passes = 2N (one full re-entrant cycle)."""
-        d = R * (1 + np.cos(np.pi * k / N))
-        return cls(R, d, medium, n_passes or 2 * N, **kw)
+    def herriott(cls, R, N, k, medium, branch="concentric", n_passes=None, **kw):
+        """Re-entrant Herriott cell: N passes (twice the spots per mirror), d = R (1 +- cos(2*pi k/N)).
+        N must be even for the concentric branch. Default n_passes = N (one full re-entrant cycle);
+        pass n_passes to simulate any other number of passes in the same cell."""
+        value = np.cos(2 * np.pi * k / N)
+        if branch == "concentric":
+            if N % 2:
+                raise ValueError(
+                    f"N = {N} is odd: the concentric branch is only re-entrant for even N. N is the "
+                    f"number of passes of one re-entrant cycle (e.g. N = {2 * N}, k = {2 * k}); "
+                    f"to simulate a different number of passes, set n_passes separately.")
+            d = R * (1+ value)
+        elif branch == "planar":
+            d = R * (1 - value)
+        else:
+            raise ValueError(f"unknown branch {branch!r}: use 'concentric' or 'planar'")
+        return cls(R, d, medium, n_passes or N, **kw)
 
     # ------------------------------------------------------------ modes
     def linear_mode(self, lam):
@@ -121,7 +133,7 @@ class MPC:
         if self.diameter is not None:
             ap = np.exp(-(np.sqrt(grid.r2) / (self.diameter / 2)) ** 30)
             F *= ap[:, :, None]
-        F = F.astype(grid.dtype)
+        F = grid.asarray(F.astype(grid.dtype))     # built on the host, stored on the grid's device
         self._bounce_cache = (grid, F)
         return F
 
