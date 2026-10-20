@@ -71,7 +71,6 @@ class MPCSimulation:
         self._peak_lam = None   # colour tracked by w_peak_*: spectral peak of the input pulse
         self.record(0)
 
-    # ------------------------------------------------------------ recording
     def _mirror_profiles(self):
         _, pr, _ = dg.profiles_1d(self.grid, self.Aw, self.prof_lams, self.prof_bw, self.prof_axis)
         return pr.astype(np.float32)

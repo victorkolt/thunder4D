@@ -20,6 +20,7 @@ def gpu_available():
                 raise RuntimeError("no CUDA device")
             a = cp.ones((8, 8), cp.complex64)
             cfft.fft2(a, axes=(0, 1))
+            cp.vdot(a, a)                       # preloads cublas
             float(cp.sum(cp.abs(a) ** 2))       # compiles a kernel: fails on unsupported GPUs
             _GPU_OK = True
         except Exception:
