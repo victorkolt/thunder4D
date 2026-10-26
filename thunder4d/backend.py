@@ -1,31 +1,63 @@
-"""Array backend: NumPy on the CPU, CuPy on an NVIDIA GPU.
+import ctypes
+import glob
+import os
+import site
+import sys
 
-Only the heavy arrays live on the device: the field A(x, y, Om), the propagators, the absorbers and
-the mirror transfer function. Axes (grid.x, grid.lam, ...) and everything returned by
-`thunder4d.diagnostics` are always NumPy arrays; `to_host` converts a device array.
-"""
 import numpy as np
 
 _GPU_OK = None
+_GPU_ERR = None
+_DLL_HANDLES = []          # keeps the added DLL directories alive
+
+
+def _windows_nvidia_dlls():
+    """On Windows, make the CUDA DLLs installed by pip (nvidia-*-cu12 packages) findable by CuPy."""
+    if sys.platform != "win32":
+        return
+    roots = set(getattr(site, "getsitepackages", lambda: [])())
+    roots.add(site.getusersitepackages())
+    roots.add(os.path.join(sys.prefix, "Lib", "site-packages"))
+    for root in roots:
+        nv = os.path.join(root, "nvidia")
+        for d in glob.glob(os.path.join(nv, "*", "bin")):
+            try:
+                _DLL_HANDLES.append(os.add_dll_directory(d))
+            except OSError:
+                pass
+        for pattern in ("cublasLt64_*.dll", "cublas64_*.dll"):   # cublasLt first: cublas depends on it
+            for f in glob.glob(os.path.join(nv, "cublas", "bin", pattern)):
+                try:
+                    ctypes.WinDLL(f)
+                except OSError:
+                    pass
 
 
 def gpu_available():
-    """True if CuPy is installed and a working CUDA device can run a kernel and an FFT."""
-    global _GPU_OK
+    """True if CuPy is installed and a working CUDA device can run an FFT, cuBLAS and a kernel."""
+    global _GPU_OK, _GPU_ERR
     if _GPU_OK is None:
         try:
+            _windows_nvidia_dlls()
             import cupy as cp
             import cupyx.scipy.fft as cfft
             if cp.cuda.runtime.getDeviceCount() < 1:
                 raise RuntimeError("no CUDA device")
             a = cp.ones((8, 8), cp.complex64)
             cfft.fft2(a, axes=(0, 1))
-            cp.vdot(a, a)                       # preloads cublas
+            cp.vdot(a, a)                       # needs cuBLAS
             float(cp.sum(cp.abs(a) ** 2))       # compiles a kernel: fails on unsupported GPUs
             _GPU_OK = True
-        except Exception:
+        except Exception as e:
             _GPU_OK = False
+            _GPU_ERR = f"{type(e).__name__}: {e}"
     return _GPU_OK
+
+
+def gpu_error():
+    """Why the GPU is unavailable (None if it works)."""
+    gpu_available()
+    return _GPU_ERR
 
 
 def resolve_device(device="auto"):
