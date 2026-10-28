@@ -49,6 +49,8 @@ c = dg.compress(grid, sim.Aw)
 print(c["fwhm_fs"], c["gdd_fs2"])
 ```
 
+A full walkthrough with figures is in [`examples/tutorial.ipynb`](examples/tutorial.ipynb). To contribute, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ---
 
 ## Physical model

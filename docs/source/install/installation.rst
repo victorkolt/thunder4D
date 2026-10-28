@@ -61,6 +61,7 @@ Repository layout
 
    thunder4d/
    ├── README.md
+   ├── CONTRIBUTING.md        development, documentation, releases
    ├── src/thunder4d/
    │   ├── __init__.py        public API
    │   ├── backend.py         CPU/GPU selection (NumPy or CuPy)
@@ -72,7 +73,9 @@ Repository layout
    │   ├── simulation.py      MPCSimulation (pass loop, recording, checkpoints, saving)
    │   └── diagnostics.py     analysis functions
    ├── examples/
+   │   ├── tutorial.ipynb
    │   ├── compare_gauss_tophat.py
    │   ├── tophat_profiles_vs_pass.py
    │   └── clipped_gauss_profiles.py
+   ├── benchmark/             comparisons with published experiments (notebooks)
    └── docs/                  this documentation (Sphinx)

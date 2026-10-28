@@ -1,6 +1,6 @@
 # Build the package and publish it to PyPI when a GitHub release is published.
 # Manual runs ("Run workflow") publish to TestPyPI instead, to try things out.
-# Uses PyPI "trusted publishing": no API token to store (see docs/README_packaging.md).
+# Uses PyPI "trusted publishing": no API token to store (see CONTRIBUTING.md).
 name: publish
 
 on:
