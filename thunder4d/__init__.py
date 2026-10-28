@@ -14,3 +14,4 @@ from .cell import MPC
 from .solver import UPPESolver
 from .simulation import MPCSimulation
 from . import diagnostics
+from .lensframe import LensFrameSimulation, LensFrameSolver, suggest_lens_grid, lens_frame_scale, imaged_near_field_lens
