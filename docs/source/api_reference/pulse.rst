@@ -155,7 +155,7 @@ Pulse
          golden-section search to maximise the overlap at :math:`\lambda_0` with a
          Gaussian of waist ``target_waist`` and stored in ``pulse.focal_length``.
 
-      A warning is printed if less than 99 % of the focused power fits in the box.
+      A ``UserWarning`` is emitted if less than 99 % of the focused power fits in the box, even with ``verbose=False``.
 
    .. py:classmethod:: imaged_near_field(grid, E, beam, energy, cell, image_z=None, curvature_radius=None, verbose=True)
 

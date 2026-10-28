@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 import pytest
 import thunder4d as m
@@ -244,6 +245,22 @@ def test_best_focal_length_matches_the_target_waist():
     p = m.Pulse.from_near_field(g, m.gaussian_spectrum(g, fwhm_fs=100), m.Beam(m.gaussian(W_NF)), 1e-3,
                                 nf_size=8 * W_NF, nf_points=128, target_waist=100e-6, verbose=False)
     assert p.focal_length == pytest.approx(np.pi * W_NF * 100e-6 / LAM0, rel=1e-2)
+
+
+def near_field_pulse(g):
+    return m.Pulse.from_near_field(g, m.gaussian_spectrum(g, fwhm_fs=100), m.Beam(m.gaussian(W_NF)), 1e-3,
+                                   nf_size=8 * W_NF, nf_points=128, focal_length=F, verbose=False)
+
+
+def test_from_near_field_warns_when_the_focus_overflows_the_box():
+    with pytest.warns(UserWarning, match="fits in the box"):
+        near_field_pulse(make_grid(Nx=16, dx=12.5e-6, Nt=16))       # box 200 um for a 100 um waist
+
+
+def test_from_near_field_is_silent_when_the_focus_fits():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        near_field_pulse(focus_grid())
 
 
 def test_from_near_field_needs_a_focal_length_or_a_target_waist():
