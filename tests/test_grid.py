@@ -25,6 +25,14 @@ def test_grid_needs_dt_or_lambda_min():
         m.Grid(8, 10e-6, 64, LAM0, device="cpu")
 
 
+@pytest.mark.parametrize("Nt", [64, 65])
+def test_grid_spectral_window_covers_the_band(Nt):
+    g = m.Grid(8, 10e-6, Nt, LAM0, lambda_min=900e-9, lambda_max=1200e-9, device="cpu")
+    lam = g.lam[g.valid]
+    assert lam.min() <= 900e-9
+    assert lam.max() >= 1200e-9
+
+
 def test_energy_is_the_same_in_time_and_frequency():
     g = make_grid()
     Aw = random_field(g)
@@ -68,6 +76,13 @@ def test_suggest_grid_box_holds_the_mirror_spot(cell):
 def test_suggest_grid_resolves_the_smallest_waist(cell):
     g = m.suggest_grid(cell, **BAND, points_per_waist=8, device="cpu")
     assert g.dx <= cell.linear_mode(900e-9)["w0"] / 8
+
+
+def test_suggest_grid_spectral_window_covers_the_band(cell):
+    g = m.suggest_grid(cell, **BAND, device="cpu")
+    lam = g.lam[g.valid]
+    assert lam.min() <= 900e-9
+    assert lam.max() >= 1200e-9
 
 
 def test_suggest_grid_time_window_holds_the_pulse(cell):
