@@ -10,7 +10,6 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import thunder4d as m
 from thunder4d import diagnostics as dg
 

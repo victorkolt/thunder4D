@@ -10,7 +10,6 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import thunder4d as m
 
 lam0, fwhm = 1030e-9, 200e-15

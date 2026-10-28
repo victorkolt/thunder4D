@@ -35,6 +35,3 @@ docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 [project.urls]
 Documentation = "https://victorkolt.github.io/thunder4D/"
 Source = "https://github.com/victorkolt/thunder4D"
-
-[tool.uv.build-backend]
-module-root = ""

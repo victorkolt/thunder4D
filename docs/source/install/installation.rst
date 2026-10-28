@@ -61,8 +61,9 @@ Repository layout
 
    thunder4d/
    ├── README.md
-   ├── thunder4d/
+   ├── src/thunder4d/
    │   ├── __init__.py        public API
+   │   ├── backend.py         CPU/GPU selection (NumPy or CuPy)
    │   ├── grid.py            Grid, FFT wrapper, suggest_grid
    │   ├── materials.py       Material (Sellmeier + n2)
    │   ├── pulse.py           spectra, profiles, aberrations, STCs, Beam, Pulse

@@ -2,11 +2,8 @@
 
 4D (x, y, z, t) UPPE simulation of multipass cells.
 """
-from importlib.metadata import PackageNotFoundError, version
-try:
-    __version__ = version("thunder4d")
-except PackageNotFoundError:   # source tree on sys.path without being installed (examples/)
-    __version__ = "unknown"
+from importlib.metadata import version
+__version__ = version("thunder4d")
 from .backend import gpu_available, to_host
 from .grid import Grid, suggest_grid, C0
 from .materials import Material
