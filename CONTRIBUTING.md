@@ -14,6 +14,15 @@ uv run --extra examples --with jupyter jupyter lab    # tutorial and benchmark n
 
 The package lives in `src/thunder4d/`. Add `--extra gpu` for CuPy.
 
+## Tests
+
+```bash
+uv run pytest
+```
+
+Each test checks one property (a convention, a normalisation or one physical term), so a failure points at one function.
+The suite runs in about 20 s. The GPU test is skipped when CuPy has no CUDA device.
+
 ## Documentation
 
 The documentation is written with [Sphinx](https://www.sphinx-doc.org) and the Read the Docs theme.

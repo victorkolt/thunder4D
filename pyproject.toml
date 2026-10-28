@@ -30,8 +30,12 @@ examples = ["matplotlib"]
 gpu = ["cupy-cuda12x"]
 
 [dependency-groups]
+dev = ["pytest>=9.2.0"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]
 Documentation = "https://victorkolt.github.io/thunder4D/"
 Source = "https://github.com/victorkolt/thunder4D"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
