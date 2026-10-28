@@ -12,28 +12,35 @@ Requirements
 - Matplotlib (only for the example scripts)
 
 No GPU and no compiled extension are needed. For an NVIDIA GPU, install CuPy
-(``pip install cupy-cuda12x``; RTX 50-series cards need CUDA 12.8 or newer): grids created with
+(``uv pip install cupy-cuda12x``; RTX 50-series cards need CUDA 12.8 or newer): grids created with
 ``device="auto"`` (the default) then run on the GPU, see :func:`thunder4d.gpu_available`.
 
-Installing with pip
--------------------
+Installing with uv
+------------------
+
+The commands use `uv <https://docs.astral.sh/uv/>`_. In a uv project:
 
 .. code-block:: bash
 
-   pip install thunder4d                 # numpy + scipy
-   pip install "thunder4d[examples]"     # + matplotlib, for the example scripts
+   uv add thunder4d                 # numpy + scipy
+   uv add "thunder4d[examples]"     # + matplotlib, for the example scripts
+   uv add "thunder4d[gpu]"          # + CuPy, for an NVIDIA GPU
+
+In an existing environment (venv, conda), use ``uv pip install`` with the same arguments.
 
 Installing from source
 ----------------------
 
-To get the example scripts or modify the code, clone the repository and install it in
-editable mode:
+To get the example scripts or modify the code, clone the repository and let uv create
+the environment:
 
 .. code-block:: bash
 
    git clone https://github.com/victorkolt/thunder4d.git
    cd thunder4d
-   pip install -e ".[examples]"
+   uv sync --extra examples          # .venv with thunder4d in editable mode
+   uv run --extra examples python examples/compare_gauss_tophat.py
+   uv run --extra examples --with jupyter jupyter lab    # tutorial and benchmark notebooks
 
 Checking the installation
 -------------------------

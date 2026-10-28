@@ -19,19 +19,20 @@ No API token is stored anywhere: GitHub proves its identity to PyPI ("trusted pu
 *Actions → publish → Run workflow*, then:
 
 ```bash
-pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ thunder4d
+uv run --no-project --with thunder4d --index https://test.pypi.org/simple/ \
+    --index-strategy unsafe-best-match python -c "import thunder4d; print(thunder4d.__version__)"
 ```
 
 ## Real release
 
-1. Bump `__version__` in `thunder4d/__init__.py` (PyPI never accepts the same version twice).
+1. Bump the version with `uv version --bump patch` (or `minor`, `major`). It updates `pyproject.toml` and `uv.lock`.
+   PyPI never accepts the same version twice.
 2. Commit, push, then on GitHub *Releases → Draft a new release*, tag `v0.1.0`, *Publish*.
-3. The workflow builds and uploads; a minute later: `pip install thunder4d`.
+3. The workflow builds and uploads; a minute later: `uv add thunder4d`.
 
 ## Build locally (optional)
 
 ```bash
-pip install build twine
-python -m build          # -> dist/thunder4d-X.Y.Z.tar.gz and .whl
-twine check dist/*
+uv build                 # -> dist/thunder4d-X.Y.Z.tar.gz and .whl
+uvx twine check dist/*
 ```

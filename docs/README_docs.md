@@ -6,8 +6,7 @@ Docs theme, the same setup as fbpic.github.io.
 ## Build locally
 
 ```bash
-pip install -r docs/requirements.txt
-sphinx-build -b html docs/source docs/_build/html
+uv run --group docs sphinx-build -b html docs/source docs/_build/html
 # open docs/_build/html/index.html
 ```
 

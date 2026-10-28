@@ -12,7 +12,7 @@ _DLL_HANDLES = []          # keeps the added DLL directories alive
 
 
 def _windows_nvidia_dlls():
-    """On Windows, make the CUDA DLLs installed by pip (nvidia-*-cu12 packages) findable by CuPy."""
+    """On Windows, make the CUDA DLLs installed by pip or uv (nvidia-*-cu12 packages) findable by CuPy."""
     if sys.platform != "win32":
         return
     roots = set(getattr(site, "getsitepackages", lambda: [])())
@@ -70,7 +70,7 @@ def resolve_device(device="auto"):
     if device in ("gpu", "cuda"):
         if not gpu_available():
             raise RuntimeError("device='gpu' requested but CuPy with a working CUDA device was not "
-                               "found (pip install cupy-cuda12x); use device='auto' or 'cpu'")
+                               "found (uv pip install cupy-cuda12x); use device='auto' or 'cpu'")
         return "gpu"
     raise ValueError("device must be 'auto', 'cpu' or 'gpu'")
 

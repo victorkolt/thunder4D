@@ -58,7 +58,7 @@ beams = {
     #     nf_size=16e-3, nf_points=192, target_waist=w0),
 }
 
-# Long runs: `python compare_gauss_tophat.py [max_seconds]` stops cleanly after the time budget,
+# Long runs: `uv run --extra examples python compare_gauss_tophat.py [max_seconds]` stops cleanly after the time budget,
 # writes a checkpoint, and resumes from it when launched again.
 MAX_SECONDS = float(sys.argv[1]) if len(sys.argv) > 1 else None
 
