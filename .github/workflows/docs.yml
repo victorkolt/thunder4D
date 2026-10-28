@@ -1,20 +1,15 @@
-# Build the Sphinx documentation and publish it on GitHub Pages.
+# Build the Sphinx documentation on every pull request, and publish it on GitHub Pages from main.
 # Settings > Pages > Source: "GitHub Actions".
 name: docs
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -24,13 +19,21 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: Build HTML
         run: uv run --locked --group docs sphinx-build -b html -W --keep-going docs/source docs/_build/html
-      - uses: actions/upload-pages-artifact@v3
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_build/html
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
