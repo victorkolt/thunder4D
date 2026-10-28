@@ -13,9 +13,9 @@ Conventions (read this once, everything else follows)
 * The solver's home domain is (x, y, Om): complex arrays of shape (Nx, Ny, Nt).
 """
 import numpy as np
+import scipy.fft
+from scipy.constants import c as C0
 from .backend import resolve_device, get_xp, xp_of
-
-C0 = 299_792_458.0
 
 
 class FFT:
@@ -27,14 +27,8 @@ class FFT:
             import cupyx.scipy.fft as mod
             self._kw, self.mod, self.backend = {}, mod, "cupy"
             return
-        if backend == "auto":
-            try:
-                import scipy.fft  # noqa: F401  (pocketfft C++: ~8x faster than numpy.fft for 2D)
-                backend = "scipy"
-            except ImportError:
-                backend = "numpy"
-        if backend == "scipy":
-            import scipy.fft as mod
+        if backend in ("auto", "scipy"):   # pocketfft C++: ~8x faster than numpy.fft for 2D
+            mod, backend = scipy.fft, "scipy"
             self._kw = {"workers": workers if workers is not None else -1}
         elif backend == "numpy":
             mod = np.fft
@@ -58,16 +52,8 @@ class FFT:
 
 
 def _next_fast(n):
-    """Smallest 2^a 3^b 5^c >= n (fast sizes for pocketfft)."""
-    n = int(np.ceil(n))
-    best = 2 ** int(np.ceil(np.log2(max(n, 1))))
-    for a in range(0, 20):
-        for b in range(0, 13):
-            for c in range(0, 9):
-                v = 2 ** a * 3 ** b * 5 ** c
-                if n <= v < best:
-                    best = v
-    return best
+    """Smallest 2^a 3^b 5^c >= n (fast sizes for pocketfft and cuFFT; real=True excludes 7 and 11)."""
+    return scipy.fft.next_fast_len(int(np.ceil(n)), real=True)
 
 
 class Grid:

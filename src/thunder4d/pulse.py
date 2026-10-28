@@ -12,9 +12,8 @@ A pulse is built as  A(x, y, Om) = E(Om) * U(x, y; Om)  where
 import math
 import warnings
 import numpy as np
-from .grid import C0
-
-FS = 1e-15
+from scipy.special import eval_genlaguerre
+from scipy.constants import c as C0, femto as FS
 
 
 # ============================================================ spectral amplitude
@@ -117,16 +116,6 @@ def top_hat(radius, order=24):
     return super_gaussian(radius, order)
 
 
-def _genlaguerre(p, a, u):
-    """Generalised Laguerre polynomial L_p^a(u) (three-term recurrence)."""
-    L0, L1 = np.ones_like(u), 1 + a - u
-    if p == 0:
-        return L0
-    for j in range(1, p):
-        L0, L1 = L1, ((2 * j + 1 + a - u) * L1 - (j + a) * L0) / (j + 1)
-    return L1
-
-
 def _hermite_1d(m, x, w):
     """Normalised 1D Hermite-Gauss function of order m (int |u|^2 dx = 1), waist w."""
     xi = np.sqrt(2) * x / w
@@ -156,7 +145,7 @@ def laguerre_gauss(w, p=0, l=0, kind="exp"):
         X, Y = np.broadcast_arrays(X, Y)
         u = 2 * (X ** 2 + Y ** 2) / w ** 2
         phi = np.arctan2(Y, X)
-        R = C * u ** (a / 2) * _genlaguerre(p, a, u) * np.exp(-u / 2)
+        R = C * u ** (a / 2) * eval_genlaguerre(p, a, u) * np.exp(-u / 2)
         if kind == "exp":
             return R * np.exp(1j * l * phi)
         if l == 0:

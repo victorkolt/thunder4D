@@ -7,7 +7,7 @@ Kerr only, no Raman for N2/air). Replace them with the values of your get_materi
 through Material(..., n2_1bar=...).
 """
 import numpy as np
-from .grid import C0
+from scipy.constants import c as C0
 
 SELLMEIER = {
     "He": (4977.77e-8, 28.54e-6, 1856.94e-8, 7.76e-3),

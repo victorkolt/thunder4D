@@ -13,9 +13,7 @@ A pulse can only be matched at one power: the wings of the pulse see the linear 
 time-dependent mismatch is precisely one of the couplings the 4D code resolves.
 """
 import numpy as np
-from .grid import C0
-
-FS = 1e-15
+from scipy.constants import c as C0, femto as FS
 
 
 class MPC:

@@ -20,7 +20,7 @@ Speed-ups
 ---------
 
 - SciPy backend with all cores (``fft_backend="scipy"``, ``workers=-1``; this is the
-  default with ``"auto"`` when SciPy is installed).
+  default with ``"auto"``).
 - ``record_every > 1``, or ``near_field=False``: near-field (collimated beam) diagnostics use per-colour
   matrix transforms and cost a few seconds per record.
 - Fewer ``profile_wavelengths``.

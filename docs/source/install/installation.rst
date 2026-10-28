@@ -6,9 +6,8 @@ Requirements
 
 - Python ≥ 3.10
 - NumPy ≥ 2.0 (single-precision FFTs)
-- SciPy (installed automatically): ``scipy.fft`` is about 8× faster than
-  ``numpy.fft`` for the 2D transforms and can use several cores; ``numpy.fft`` is used
-  as a fallback if SciPy is missing
+- SciPy ≥ 1.10 (installed automatically): ``scipy.fft`` is about 8× faster than
+  ``numpy.fft`` for the 2D transforms and can use several cores
 - Matplotlib (only for the example scripts)
 
 No GPU and no compiled extension are needed. For an NVIDIA GPU, install CuPy
