@@ -1,7 +1,7 @@
 """Evolution, pass after pass, of the 1D beam profile of selected colours (1010 / 1030 / 1050 nm)
 and of the spectrally integrated ("global") profile, for a top-hat near field.
 
-Same toy cell as compare_gauss_tophat.py. Resumable:  python tophat_profiles_vs_pass.py [max_seconds]
+Same toy cell as compare_gauss_tophat.py. Resumable:  uv run --extra examples python tophat_profiles_vs_pass.py [max_seconds]
 Figures in ./out_profiles_<injection>/
 """
 import os
@@ -9,7 +9,6 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import thunder4d as m
 
 lam0, fwhm, energy = 1030e-9, 200e-15, 1.2e-3

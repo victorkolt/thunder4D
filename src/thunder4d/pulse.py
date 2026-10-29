@@ -10,6 +10,7 @@ A pulse is built as  A(x, y, Om) = E(Om) * U(x, y; Om)  where
     a top-hat near field into the cell).
 """
 import math
+import warnings
 import numpy as np
 from .grid import C0
 
@@ -360,8 +361,8 @@ class Pulse:
             p = np.sum(np.abs(U) ** 2) * grid.dA
             worst = min(worst, p)
             Aw[:, :, j] = E[j] * U / np.sqrt(p)
-        if verbose and worst < 0.99:
-            print(f"[Pulse] WARNING: only {worst*100:.1f}% of the focused power fits in the box")
+        if worst < 0.99:
+            warnings.warn(f"only {worst*100:.1f}% of the focused power fits in the box", stacklevel=2)
         p = cls(grid, Aw).set_energy(energy)
         p.focal_length = focal_length
         return p

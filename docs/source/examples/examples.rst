@@ -10,7 +10,7 @@ reached, and resume from it on the next launch:
 
 .. code-block:: bash
 
-   python clipped_gauss_profiles.py 600
+   uv run --extra examples python clipped_gauss_profiles.py 600
 
 Gaussian versus top-hat
 -----------------------
