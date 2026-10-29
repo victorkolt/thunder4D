@@ -37,8 +37,8 @@ def suggest_lens_grid(cell, lambda0, lambda_min, lambda_max, pulse_fwhm, *, box_
     w_hi = 2 * np.pi * C0 / lambda_min - 2 * np.pi * C0 / lambda0
     w_lo = 2 * np.pi * C0 / lambda0 - 2 * np.pi * C0 / lambda_max
     dt = np.pi / max(w_hi, w_lo)
-    Nt = _next_fast(time_window_factor * pulse_fwhm / dt)
-    return Grid(Nx, L / Nx, Nt, lambda0, dt=dt, **grid_kw)
+    Nt = _next_fast(time_window_factor * pulse_fwhm / dt + 2)   # Grid shortens dt by up to 2 bins
+    return Grid(Nx, L / Nx, Nt, lambda0, lambda_min=lambda_min, lambda_max=lambda_max, **grid_kw)
 
 
 class LensFrameSolver(UPPESolver):
