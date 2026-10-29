@@ -39,7 +39,8 @@ the environment:
    cd thunder4d
    uv sync --extra examples          # .venv with thunder4d in editable mode
    uv run --extra examples python examples/compare_gauss_tophat.py
-   uv run --extra examples --with jupyter jupyter lab    # tutorial and benchmark notebooks
+   uv run --extra examples --with jupyter jupyter lab    # tutorial notebook
+   cd benchmark && uv run --extra examples python bench_grebing2020_1mJ.py --quick   # benchmarks
 
 Checking the installation
 -------------------------
@@ -48,8 +49,8 @@ Checking the installation
 
    import thunder4d as m
 
-   cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=m.Material("Ar", 1.0))
-   grid = m.suggest_grid(cell, 1030e-9, 900e-9, 1200e-9, 200e-15)
+   cell = m.MPC.herriott(R=0.5, N=20, k=1, medium=m.Material("Ar", 1.0))
+   grid = m.suggest_lens_grid(cell, 1030e-9, 900e-9, 1200e-9, 200e-15)
    print(grid.describe())
    print(grid.fft.backend)      # 'scipy' if SciPy was found, else 'numpy'
 
@@ -70,11 +71,15 @@ Repository layout
    │   ├── cell.py            MPC (geometry, eigenmode, nonlinear matching, mirrors)
    │   ├── solver.py          UPPESolver
    │   ├── simulation.py      MPCSimulation (pass loop, recording, checkpoints, saving)
+   │   ├── lensframe.py       lens frame: LensFrameSimulation, LensFrameSolver, suggest_lens_grid
    │   └── diagnostics.py     analysis functions
    ├── examples/
    │   ├── tutorial.ipynb
    │   ├── compare_gauss_tophat.py
    │   ├── tophat_profiles_vs_pass.py
    │   └── clipped_gauss_profiles.py
-   ├── benchmark/             comparisons with published experiments (notebooks)
+   ├── benchmark/             comparisons with published experiments (scripts, see benchmark/README.md)
+   │   ├── framework.py       shared run / metrics / output machinery
+   │   ├── analyze.py         tables, comparisons, sweeps, figures
+   │   └── bench_*.py         one script per paper
    └── docs/                  this documentation (Sphinx)

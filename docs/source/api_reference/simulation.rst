@@ -4,6 +4,8 @@ thunder4d.simulation
 .. py:module:: thunder4d.simulation
 
 Driver: propagates a pulse through the cell and records diagnostics after every pass.
+:class:`~thunder4d.lensframe.LensFrameSimulation` (recommended) is a subclass with the same
+arguments, methods, history and saved file; only its mirror records are in frame coordinates.
 
 .. py:class:: MPCSimulation(pulse, cell, *, solver=None, record_every=1, near_field=True, max_order=6, mode_reference="linear", save_fields=(), save_dir=".", record_mirror=True, slit=None, profile_wavelengths=(), profile_bandwidth=0.0, profile_axis="x", **solver_kw)
 

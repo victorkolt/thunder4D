@@ -6,12 +6,13 @@ import thunder4d as th
 from thunder4d import diagnostics as dg
 
 device = sys.argv[1] if len(sys.argv) > 1 else "auto"
-lam0 = 1030e-9
-cell = th.MPC(R=0.5, d=0.94, medium=th.Material("Ar", 1.0), n_passes=2)
+lam0 = 785e-9
+herriott(cls, R, N, k, medium, branch="concentric", n_passes=None, **kw)
+cell = th.herriott(R=0.5, d=0.94, medium=th.Material("He", 1.0), n_passes=10)
 grids = {
-    "standard": th.suggest_grid(cell, lam0, 920e-9, 1150e-9, 200e-15, box_factor=6,
-                                points_per_waist=6, time_window_factor=6, device=device),
-    "lens frame": th.suggest_lens_grid(cell, lam0, 920e-9, 1150e-9, 200e-15, box_factor=8,
+    #"standard": th.suggest_grid(cell, lam0, 920e-9, 1150e-9, 200e-15, box_factor=6,
+    #                            points_per_waist=6, time_window_factor=6, device=device),
+    "lens frame": th.suggest_lens_grid(cell, lam0, 500e-9, 1150e-9, 30e-15, box_factor=8,
                                        points_per_waist=6, time_window_factor=6, device=device),
 }
 spec = {}
@@ -24,7 +25,7 @@ for name, g in grids.items():
     Sim = th.LensFrameSimulation if name == "lens frame" else th.MPCSimulation
     t = time.time()
     sim = Sim(pulse, cell, phi_max=0.02, near_field=False, record_mirror=False)
-    sim.run(verbose=False)
+    sim.run(verbose=True)
     lam, S = dg.total_spectrum(g, sim.Aw)
     c, h = dg.compress(g, sim.Aw), sim.history
     spec[name] = (lam, S / S.max())

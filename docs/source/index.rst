@@ -16,7 +16,9 @@ Unlike 1D or radially symmetric codes, thunder4d resolves the full transverse fi
 
 Main features:
 
-- non-paraxial linear propagation with the full dispersion of the gas,
+- a **lens-frame** solver whose grid follows the beam inside the cell: the box only has to
+  hold the waist, so near-concentric, high-energy cells cost no more than any other,
+- linear propagation with the full dispersion of the gas (non-paraxial standard solver also available),
 - Kerr nonlinearity with self-steepening,
 - adaptive split-step scheme driven by the nonlinear phase per step,
 - linear and **nonlinear (Kerr-lens) mode matching** of the cell,

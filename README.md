@@ -11,7 +11,7 @@ Full documentation: `https://victorkolt.github.io/thunder4D/`.
 - time-dependent nonlinear mode mismatch,
 - influence of space-time couplings (spatial chirp, pulse-front tilt, …) on the output.
 
-The code is pure Python. NumPy (≥ 2.0) and SciPy (≥ 1.10) are required; `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. An NVIDIA GPU is optional: with CuPy installed (`uv pip install cupy-cuda12x`), `suggest_grid(..., device="auto")` (the default) runs the propagation on the GPU, and `device="cpu"` / `"gpu"` force one or the other. `thunder4d.gpu_available()` tells you whether CuPy works; `thunder4d.to_host(array)` converts a device array to NumPy. Everything returned by `thunder4d.diagnostics` is a NumPy array on either device.
+The code is pure Python. NumPy (≥ 2.0) and SciPy (≥ 1.10) are required; `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. An NVIDIA GPU is optional: with CuPy installed (`uv pip install cupy-cuda12x`), `suggest_lens_grid(..., device="auto")` (the default) runs the propagation on the GPU, and `device="cpu"` / `"gpu"` force one or the other. `thunder4d.gpu_available()` tells you whether CuPy works; `thunder4d.to_host(array)` converts a device array to NumPy. Everything returned by `thunder4d.diagnostics` is a NumPy array on either device.
 
 ## Quick start
 
@@ -19,27 +19,24 @@ The code is pure Python. NumPy (≥ 2.0) and SciPy (≥ 1.10) are required; `sci
 import thunder4d as m
 from thunder4d import diagnostics as dg
 
-# medium and cell
+# 1) medium and cell
 gas  = m.Material("Ar", pressure_bar=1.0)
-cell = m.MPC.herriott(R=0.5, N=20, k=3, branch="planar", medium=gas)  # 20 passes, 54 deg Gouy/pass, re-entrant
+cell = m.MPC.herriott(R=0.5, N=20, k=1, medium=gas)   # near-concentric, 20 passes, 162 deg Gouy/pass
 
-# grid sized from the cell
-grid = m.suggest_grid(cell, lambda0=1030e-9, lambda_min=900e-9, lambda_max=1200e-9, pulse_fwhm=200e-15, box_factor=12)
+# 2) lens-frame grid: the box only has to hold the beam at the waist
+grid = m.suggest_lens_grid(cell, lambda0=1030e-9, lambda_min=900e-9, lambda_max=1200e-9,
+                           pulse_fwhm=200e-15, box_factor=6)
 print(grid.describe())
 
-# 1) spectrum (+ phase)
+# 3) pulse with nonlinear mode matching
 E = m.gaussian_spectrum(grid, fwhm_fs=200)
-E = m.add_spectral_phase(grid, E, gdd_fs2=0)
-
-# 2) nonlinear mode matching, computed from a probe pulse of the right energy
-probe = m.Pulse.at_focus(grid, E, m.Beam(m.gaussian(1e-3)), 1.2e-3)
-mm = cell.match(probe)
-
-# 3) the actual input beam
-pulse = m.Pulse.at_focus(grid, E, m.Beam(m.gaussian(mm["w0"])), 1.2e-3)
+probe = m.Pulse.at_focus(grid, E, m.Beam(m.gaussian(cell.linear_mode(1030e-9)["w0"])), 0.6e-3)
+mm = cell.match(probe)                                  # P/Pc, matched waist, B per pass
+pulse = m.Pulse.at_focus(grid, E, m.Beam(m.gaussian(mm["w0"]), chromatic_size="eigenmode"), 0.6e-3)
 
 # 4) run
-sim = m.MPCSimulation(pulse, cell, phi_max=0.02, mode_reference=mm["w0"], profile_wavelengths=[1010e-9, 1030e-9, 1050e-9], profile_bandwidth=2e-9)
+sim = m.LensFrameSimulation(pulse, cell, phi_max=0.02, mode_reference=mm["w0"],
+                            profile_wavelengths=[1010e-9, 1030e-9, 1050e-9], profile_bandwidth=2e-9)
 sim.run()
 sim.save("run.npz")
 
@@ -49,7 +46,7 @@ c = dg.compress(grid, sim.Aw)
 print(c["fwhm_fs"], c["gdd_fs2"])
 ```
 
-A full walkthrough with figures is in [`examples/tutorial.ipynb`](examples/tutorial.ipynb). To contribute, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+A full walkthrough with figures is in [`examples/tutorial.ipynb`](examples/tutorial.ipynb); comparisons with published experiments are in [`benchmark/`](benchmark/README.md). To contribute, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
@@ -69,7 +66,17 @@ k(ω) = n(ω) ω / c,   ω = ω₀ + Ω,   k₁ = dk/dω at ω₀
 - **Kerr term:** it is the instantaneous electronic response. Its frequency dependence gives self-steepening. With `self_steepening=False` it becomes γ = n₂ω₀/c.
 - **Edge taper:** the nonlinear source is tapered to zero at the edges of the spectral window to avoid aliasing.
 
-## Numerical scheme
+## The lens frame
+
+The recommended solver (`LensFrameSimulation`, grid from `suggest_lens_grid`) propagates the field in a frame that follows the cell eigenmode: A(x, y, z) = (1/s) B(x/s, y/s, ζ) exp(i k r² / 2R(z)), with s(z) = sqrt(1 + z²/z_R²), R(z) = z + z_R²/z and ζ = z_R arctan(z/z_R). In this frame:
+
+- **the grid only holds the waist:** the eigenmode does not change size, so the box is a few waists wide whatever the mirror separation (75 points per axis instead of 480 for the tutorial cell, instead of 1125 for an 18 mJ cell at d = 0.995·2R);
+- **the mirror is the identity:** its curvature cancels the frame wavefront exactly; only its spectral response and aperture remain;
+- **the cell centre is physical** (s = 1): every diagnostic recorded there is unchanged. Mirror records are in frame coordinates; convert them with `sim.mirror_scale` (x_phys = s_m ξ, F_phys = F / s_m²).
+
+The frame equation is ∂B/∂ζ = (i/2k)∇²B − i k ρ² B / (2 z_R²) + i β s² B + i γ FT_t[|B|² B]: paraxial diffraction plus a harmonic potential (whose eigenstates are the Hermite–Gauss modes of the cell, so the Gouy phase per pass is built in), the gas dispersion over the physical length, and the unchanged Kerr term. The step is limited by both `phi_max` and `gouy_step` (maximum Gouy phase per step, default 0.05 rad). The standard non-paraxial fixed-grid solver below (`suggest_grid` + `MPCSimulation`) has the same interface and remains available for cross-checks; `tests/test_lensframe.py` checks that both agree within 0.5 %. Details: documentation, page *The lens frame*.
+
+## Numerical scheme (standard solver)
 
 - **Home domain:** the solver keeps the field in the mixed domain (x, y, Ω).
   - The linear step needs only 2D spatial FFTs, because Ω is already a coordinate.
@@ -80,9 +87,10 @@ k(ω) = n(ω) ω / c,   ω = ω₀ + Ω,   k₁ = dk/dω at ω₀
 
 ## Performance and memory
 
-- **Cost per step:** 2 spatial 2D FFTs, 8 temporal 1D FFTs (RK4) and a few array operations. With SciPy on one core, a 150 × 150 × 135 grid takes about 0.1–0.4 s per step. A 20-pass run at B ≈ 16 rad needs about 900 steps.
+- **Lens frame:** the gain is mostly in grid points (see above). A step costs one 2D FFT pair, 8 temporal 1D FFTs (RK4) and phase multiplications built from 1D arrays; no linear operator or propagator cache is stored. A pass takes at least θ/`gouy_step` steps.
+- **Cost per step (standard solver):** 2 spatial 2D FFTs, 8 temporal 1D FFTs (RK4) and a few array operations. With SciPy on one core, a 150 × 150 × 135 grid takes about 0.1–0.4 s per step. A 20-pass run at B ≈ 16 rad needs about 900 steps.
 - **Steps per pass:** they scale with the B-integral per pass divided by `phi_max`.
-- **Memory:** about 8–10 field arrays: the field, RK4 buffers, the linear operator `D`, up to `cache_size` cached propagators and the cached mirror transfer. One complex64 array is Nx·Ny·Nt·8 bytes, so 256 × 256 × 256 is 134 MB.
+- **Memory (standard solver):** about 8–10 field arrays: the field, RK4 buffers, the linear operator `D`, up to `cache_size` cached propagators and the cached mirror transfer. One complex64 array is Nx·Ny·Nt·8 bytes, so 256 × 256 × 256 is 134 MB.
 - **Speed-ups:**
   - SciPy backend with all cores (`fft_backend="scipy"`, `workers=-1`, the default with `"auto"`).
   - `record_every > 1`, or `near_field=False` (near-field diagnostics, i.e. of the collimated beam, use per-colour matrix transforms).

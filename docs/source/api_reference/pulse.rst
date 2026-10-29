@@ -171,6 +171,11 @@ Pulse
          For a top-hat, a radius of 1.12 × ``w_mirror`` maximises the overlap with the
          Gaussian mode (:math:`\eta = 0.815`).
 
+      .. note::
+
+         This builder works on a standard (fixed) grid. On a lens-frame grid use
+         :func:`~thunder4d.lensframe.imaged_near_field_lens`, which takes the same profile.
+
    All builders normalise each colour to unit power before multiplying by
    :math:`E(\Omega)`, then scale the total to ``energy`` [J].
 

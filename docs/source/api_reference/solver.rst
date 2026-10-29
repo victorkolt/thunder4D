@@ -3,7 +3,9 @@ thunder4d.solver
 
 .. py:module:: thunder4d.solver
 
-UPPE propagator. See :doc:`../overview/overview` for the equation and the scheme.
+UPPE propagator on a fixed grid (standard, non-paraxial). See :doc:`../overview/overview` for
+the equation and the scheme, and :class:`~thunder4d.lensframe.LensFrameSolver` for the
+beam-following solver.
 
 .. py:class:: UPPESolver(grid, medium, *, phi_max=0.02, dz_max=None, paraxial=False, self_steepening=True, absorber_frac=0.9, absorber_order=16, cache_size=4)
 
