@@ -1,0 +1,12 @@
+numpy>=2.0
+scipy>=1.10
+
+[docs]
+sphinx>=7
+sphinx_rtd_theme>=2
+
+[examples]
+matplotlib
+
+[gpu]
+cupy-cuda12x

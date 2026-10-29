@@ -6,7 +6,7 @@ build-backend = "uv_build"
 name = "thunder4d"
 license = "MIT"
 license-files = ["LICENSE"]
-version = "0.9.3"
+version = "0.10.0"
 description = "thunder4d: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
 readme = "README.md"
 requires-python = ">=3.10"
