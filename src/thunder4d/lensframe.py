@@ -8,13 +8,12 @@ centre B is the physical field. The grid only has to hold the beam at the waist 
 """
 import time
 import numpy as np
+from scipy.constants import c as C0, femto as FS
 
-from .grid import C0, Grid, _next_fast
+from .grid import Grid, _next_fast
 from .solver import UPPESolver
 from .simulation import MPCSimulation
 from . import diagnostics as dg
-
-FS = 1e-15
 
 
 def lens_frame_scale(cell):

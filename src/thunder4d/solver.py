@@ -11,7 +11,7 @@ Extension point: override `nonlinear(Aw)` (ionisation, Raman, ...).
 """
 import time
 import numpy as np
-from .grid import C0
+from scipy.constants import c as C0
 
 
 class UPPESolver:

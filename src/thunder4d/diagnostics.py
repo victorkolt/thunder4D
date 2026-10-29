@@ -8,10 +8,8 @@ near field  = the collimated beam: angular spectrum on a common angle grid theta
               all colours.
 """
 import numpy as np
-from .grid import C0
+from scipy.constants import c as C0, femto as FS
 from .backend import to_host
-
-FS = 1e-15
 
 
 # ------------------------------------------------------------------ basic quantities

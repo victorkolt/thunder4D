@@ -27,7 +27,7 @@ Grid
    :param str device: ``"auto"`` (GPU if CuPy and a CUDA device work, else CPU), ``"cpu"`` or
       ``"gpu"`` (raises if no GPU is usable). The field, propagators and mirror transfer function live
       on that device (``grid.device``, ``grid.xp``); axes such as ``grid.x`` and ``grid.lam`` stay NumPy.
-   :param str fft_backend: ``"auto"`` (SciPy if installed, else NumPy), ``"scipy"`` or
+   :param str fft_backend: ``"auto"`` (same as ``"scipy"``), ``"scipy"`` or
       ``"numpy"``
    :param int workers: threads for the SciPy backend (default: all cores)
 
