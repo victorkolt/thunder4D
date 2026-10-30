@@ -30,7 +30,7 @@ examples = ["matplotlib"]
 gpu = ["cupy-cuda12x"]
 
 [dependency-groups]
-dev = ["pytest>=9.2.0"]
+dev = ["pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.95"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]
@@ -39,3 +39,21 @@ Source = "https://github.com/victorkolt/thunder4D"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+# the notebooks and benchmark/ are being reworked on another branch: lint them once it is merged
+extend-exclude = ["*.ipynb", "benchmark"]
+
+[tool.ruff.lint]
+extend-select = ["E501", "W"]   # no formatter: keep line length and whitespace in check
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]   # re-exports
+
+[tool.ruff.lint.isort]
+known-local-folder = ["helpers"]   # tests/helpers.py
+combine-as-imports = true
+
+[tool.ty.src]
+include = ["src", "tests"]

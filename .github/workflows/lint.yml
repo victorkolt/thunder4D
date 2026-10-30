@@ -1,0 +1,21 @@
+# Lint (ruff) and type-check (ty) on every pull request and on every push to main.
+# Errors show up as annotations on the pull request diff.
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - run: uv run --locked ruff check --output-format github
+      - run: uv run --locked ty check --output-format github
