@@ -9,7 +9,6 @@ the linear step needs only 2D spatial FFTs. Strang splitting, RK4 for the nonlin
 step size set by the peak nonlinear phase per step (phi_max), like the B-driven dz of the MATLAB code.
 Extension point: override `nonlinear(Aw)` (ionisation, Raman, ...).
 """
-import time
 import numpy as np
 from scipy.constants import c as C0
 
@@ -17,30 +16,35 @@ from scipy.constants import c as C0
 class UPPESolver:
     def __init__(self, grid, medium, *, phi_max=0.02, dz_max=None, paraxial=False,
                  self_steepening=True, absorber_frac=0.9, absorber_order=16, cache_size=4):
-        self.grid, self.medium = grid, medium
-        g = grid
-        self.phi_max, self.dz_max = phi_max, dz_max
-        w, w0 = g.omega, g.omega0
-        k = medium.k(np.where(g.valid, w, w0))
-        self.k0 = float(medium.k(w0))
-        h = w0 * 1e-4
-        self.k1 = float((medium.k(w0 + h) - medium.k(w0 - h)) / (2 * h))
-        self.n2 = medium.n2
-
-        xp = self.xp = g.xp                          # numpy on the CPU, cupy on the GPU
+        self._setup(grid, medium, phi_max, self_steepening, absorber_frac, absorber_order)
+        self.dz_max = dz_max
+        g, xp = grid, self.xp
         KX2 = xp.asarray(g.kx[:, None] ** 2 + g.ky[None, :] ** 2)
         self.D = xp.empty(g.shape, np.complex64 if g.dtype == np.complex64 else np.complex128)
         for j in range(g.Nt):
             if not g.valid[j]:
                 self.D[:, :, j] = 0
                 continue
-            kj = float(k[j])
+            kj = float(self.k[j])
             if paraxial:
                 kz = kj - KX2 / (2 * kj)
             else:
                 kz = xp.sqrt(kj ** 2 - KX2 + 0j)     # evanescent -> +i|.|, decays
             self.D[:, :, j] = kz - self.k0 - self.k1 * float(g.Omega[j])
         self._cache, self.cache_size = {}, cache_size
+
+    def _setup(self, grid, medium, phi_max, self_steepening, absorber_frac, absorber_order):
+        """Everything but the linear operator (shared with LensFrameSolver): wavenumbers,
+        Kerr coefficient, absorbers and counters."""
+        self.grid, self.medium, self.phi_max = grid, medium, phi_max
+        g = grid
+        w, w0 = g.omega, g.omega0
+        self.k = medium.k(np.where(g.valid, w, w0))   # k(w) on the grid, k0 outside the window
+        self.k0 = float(medium.k(w0))
+        h = w0 * 1e-4
+        self.k1 = float((medium.k(w0 + h) - medium.k(w0 - h)) / (2 * h))
+        self.n2 = medium.n2
+        xp = self.xp = g.xp                          # numpy on the CPU, cupy on the GPU
 
         n = medium.n(np.where(g.valid, w, w0))
         n0 = medium.n(w0)
@@ -102,11 +106,9 @@ class UPPESolver:
             self.xp.multiply(k, c * h, out=tmp)
             tmp += Aw
             k = self.nonlinear(tmp)
+            acc += k
             if wgt == 2.0:
-                acc += k
-                acc += k
-            else:
-                acc += k
+                acc += k            # weight 2 without allocating 2k
         acc *= h / 6
         Aw += acc
         return Aw

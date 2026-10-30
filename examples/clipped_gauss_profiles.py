@@ -7,8 +7,9 @@ at the mirror (before the bounce) and in the collimated beam (near field), for s
 """
 import os
 import sys
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 import thunder4d as m
 

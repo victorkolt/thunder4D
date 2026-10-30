@@ -6,14 +6,12 @@ zR = sqrt(d(2R-d))/2, zeta = zR atan(z/zR). B obeys (paraxial, exact):
 The Kerr term is unchanged in zeta; the curved mirror is the identity in this frame; at the cell
 centre B is the physical field. The grid only has to hold the beam at the waist scale.
 """
-import time
 import numpy as np
-from scipy.constants import c as C0, femto as FS
 
-from .grid import Grid, _next_fast
-from .solver import UPPESolver
+from .grid import _sized_grid
+from .pulse import Pulse
 from .simulation import MPCSimulation
-from . import diagnostics as dg
+from .solver import UPPESolver
 
 
 def lens_frame_scale(cell):
@@ -32,12 +30,7 @@ def suggest_lens_grid(cell, lambda0, lambda_min, lambda_max, pulse_fwhm, *, box_
     w0_lo = cell.linear_mode(lambda_min)["w0"]
     L = box_factor * w0_hi
     dx = w0_lo / points_per_waist
-    Nx = _next_fast(L / dx)
-    w_hi = 2 * np.pi * C0 / lambda_min - 2 * np.pi * C0 / lambda0
-    w_lo = 2 * np.pi * C0 / lambda0 - 2 * np.pi * C0 / lambda_max
-    dt = np.pi / max(w_hi, w_lo)
-    Nt = _next_fast(time_window_factor * pulse_fwhm / dt + 2)   # Grid shortens dt by up to 2 bins
-    return Grid(Nx, L / Nx, Nt, lambda0, lambda_min=lambda_min, lambda_max=lambda_max, **grid_kw)
+    return _sized_grid(L, dx, lambda0, lambda_min, lambda_max, pulse_fwhm, time_window_factor, **grid_kw)
 
 
 class LensFrameSolver(UPPESolver):
@@ -48,19 +41,11 @@ class LensFrameSolver(UPPESolver):
     def __init__(self, grid, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True,
                  absorber_frac=0.9, absorber_order=16):
         # UPPESolver.__init__ is not called: it would build the 3D operator we want to avoid
-        g, medium = grid, cell.medium
-        self.grid, self.medium, self.cell = grid, medium, cell
-        xp = self.xp = g.xp
-        self.phi_max = phi_max
+        self._setup(grid, cell.medium, phi_max, self_steepening, absorber_frac, absorber_order)
+        self.cell = cell
         self.zR, self.zeta_m, self.s_m = lens_frame_scale(cell)
         self.h_max = gouy_step * self.zR
-
-        w, w0 = g.omega, g.omega0
-        k = np.where(g.valid, medium.k(np.where(g.valid, w, w0)), medium.k(w0))
-        self.k0 = float(medium.k(w0))
-        hw = w0 * 1e-4
-        self.k1 = float((medium.k(w0 + hw) - medium.k(w0 - hw)) / (2 * hw))
-        self.n2 = medium.n2
+        g, k = grid, self.k
         self._beta = np.where(g.valid, k - self.k0 - self.k1 * g.Omega, 0.0)
         self._cdt = np.complex64 if g.dtype == np.complex64 else np.complex128
         self._kx2 = (g.kx ** 2)[:, None, None]
@@ -68,21 +53,6 @@ class LensFrameSolver(UPPESolver):
         self._x2 = (g.x ** 2)[:, None, None]
         self._y2 = (g.y ** 2)[None, :, None]
         self._kk = k[None, None, :]
-
-        n = medium.n(np.where(g.valid, w, w0))
-        n0 = medium.n(w0)
-        gam = self.n2 * (w / C0 * n0 / n if self_steepening else np.full_like(w, w0 / C0))
-        u = np.abs(g.Omega) / np.abs(g.Omega).max()
-        gam = gam * np.exp(-(u / 0.95) ** 40) * g.valid
-        self.igamma = xp.asarray((1j * gam).astype(g.dtype)[None, None, :])
-
-        ax = lambda v: np.exp(-(np.abs(v) / (absorber_frac * np.abs(v).max())) ** absorber_order)
-        self.absorber_xy = xp.asarray((ax(g.x)[:, None] * ax(g.y)[None, :]).astype(g.rdtype)[:, :, None])
-        self.absorber_w = xp.asarray((ax(g.Omega) * g.valid).astype(g.rdtype)[None, None, :])
-        self.absorber_t = xp.asarray(ax(g.t).astype(g.rdtype)[None, None, :])
-
-        self.B, self.nsteps, self.z, self._Ipeak = 0.0, 0, 0.0, None
-        self._cache, self.cache_size = {}, 0
 
     def z_of_zeta(self, zeta):
         return self.zR * np.tan(zeta / self.zR)
@@ -111,7 +81,7 @@ class LensFrameSolver(UPPESolver):
         """Propagate B from zeta_a to zeta_b (within one pass, |zeta| <= zeta_m)."""
         Bw = self.grid.asarray(Bw)
         nonlinear = self.n2 != 0
-        if nonlinear and self._Ipeak is None:
+        if self._Ipeak is None:
             self._Ipeak = self.peak_intensity(Bw)
         zeta, pend_h, pend_dz = zeta_a, 0.0, 0.0
         while zeta < zeta_b - 1e-15 * self.zR:
@@ -134,7 +104,7 @@ class LensFrameSolver(UPPESolver):
         Bw = self._kinetic(Bw, pend_h, pend_dz)
         self.z += self.z_of_zeta(zeta_b) - self.z_of_zeta(zeta_a)
         return Bw
-    
+
     def propagate_linear_zeta(self, Bw, zeta_a, zeta_b):
         """Linear propagation (no Kerr) from zeta_a to zeta_b, forwards or backwards."""
         Bw = self.grid.asarray(Bw)
@@ -148,25 +118,18 @@ class LensFrameSolver(UPPESolver):
             Bw = self._kinetic(Bw, h / 2, self.z_of_zeta(zeta + h) - self.z_of_zeta(zm))
             zeta += h
         return Bw
-    
+
     def propagate(self, Aw, L):
         raise NotImplementedError("use propagate_zeta (lens frame) or the standard UPPESolver")
 
     def mirror(self, Bw):
         """Bounce in the lens frame: spectral response and aperture only (curvature cancels)."""
         g, cell = self.grid, self.cell
-        W = g.Omega * FS
-        spec = np.exp(1j * (cell.gdd / 2 * W ** 2 + cell.tod / 6 * W ** 3)).astype(complex)
-        lam = np.where(g.valid, g.lam, 1.0)
-        spec *= np.sqrt(np.clip(cell.refl(lam), 0, 1)) if callable(cell.refl) else np.sqrt(cell.refl)
-        if cell.mphase is not None:
-            spec *= np.exp(1j * cell.mphase(lam))
-        spec *= g.valid
-        Bw *= self.xp.asarray(spec.astype(g.dtype)[None, None, :])
-        if cell.diameter is not None:                      # physical radius r = s_m * xi
-            ap = np.exp(-(self.s_m * np.sqrt(g.r2) / (cell.diameter / 2)) ** 30)
-            Bw *= self.xp.asarray(ap.astype(g.rdtype)[:, :, None])
+        Bw *= self.xp.asarray(cell.mirror_spectrum(g).astype(g.dtype)[None, None, :])
+        ap = cell.mirror_aperture(self.s_m * np.sqrt(g.r2))     # physical radius r = s_m * xi
+        Bw *= self.xp.asarray(ap.astype(g.rdtype)[:, :, None])
         return Bw
+
 
 def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=True):
     """Lens-frame version of Pulse.imaged_near_field: near field imaged (same size for every colour)
@@ -176,7 +139,6 @@ def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=Tr
     In the frame the eigenmode wavefront cancels exactly, so the field at that plane is just the
     profile with coordinates scaled by s(z): B(xi) = s U(s xi). `beam` is given in PHYSICAL
     coordinates at the image plane (e.g. top_hat(1.12 * w_mirror))."""
-    from .pulse import Pulse
     S = LensFrameSolver(grid, cell)
     z = cell.d / 2 if image_z is None else float(image_z)
     s = np.sqrt(1 + (z / S.zR) ** 2)
@@ -194,36 +156,23 @@ def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=Tr
         print(f"[Pulse] near field imaged at z = {z*100:.1f} cm (lens frame, s = {s:.2f})")
     return p
 
+
 class LensFrameSimulation(MPCSimulation):
     """MPCSimulation on a beam-following grid. Cell-centre records are physical; mirror records
     are in frame coordinates (physical x = mirror_scale * x, fluence / mirror_scale**2)."""
+
+    solver: LensFrameSolver
 
     def __init__(self, pulse, cell, *, phi_max=0.02, gouy_step=0.05, **kw):
         solver = LensFrameSolver(pulse.grid, cell, phi_max=phi_max, gouy_step=gouy_step)
         self.mirror_scale = solver.s_m
         super().__init__(pulse, cell, solver=solver, **kw)
 
-    def run(self, n_passes=None, verbose=True, max_seconds=None):
-        n = n_passes or (self.cell.n_passes - self.passes_done)
-        S, t_start = self.solver, time.time()
-        for _ in range(n):
-            if max_seconds is not None and time.time() - t_start > max_seconds:
-                break
-            p = self.passes_done + 1
-            self.Aw = S.propagate_zeta(self.Aw, 0.0, S.zeta_m)            # centre -> mirror
-            Fm = dg.fluence(self.grid, self.Aw).astype(np.float32) if self.record_mirror else None
-            Pm = self._mirror_profiles() if (self.record_mirror and self.prof_lams) else None
-            self.Aw = S.mirror(self.Aw)
-            self.Aw = S.absorb(self.Aw)
-            self.Aw = S.propagate_zeta(self.Aw, -S.zeta_m, 0.0)           # mirror -> centre
-            self.Aw = S.absorb(self.Aw, temporal=True)
-            self.passes_done = p
-            if p % self.record_every == 0 or p == self.cell.n_passes:
-                self.record(p, Fm, Pm)
-                if verbose:
-                    h = self.history
-                    print(f"pass {p:3d}/{self.cell.n_passes} | B = {S.B:6.2f} rad | "
-                          f"E = {h['energy'][-1]*1e3:.4g} mJ | eta00 = {h['eta00_total'][-1]:.4f} | "
-                          f"V_far = {h['V_far'][-1]:.4f} | steps {S.nsteps} | {h['wall_s'][-1]:.0f} s",
-                          flush=True)
-        return self
+    def _to_mirror(self, Aw):
+        return self.solver.propagate_zeta(Aw, 0.0, self.solver.zeta_m)
+
+    def _bounce(self, Aw):
+        return self.solver.mirror(Aw)
+
+    def _to_centre(self, Aw):
+        return self.solver.propagate_zeta(Aw, -self.solver.zeta_m, 0.0)

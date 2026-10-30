@@ -1,7 +1,10 @@
 import warnings
+
 import numpy as np
 import pytest
+
 import thunder4d as m
+
 from helpers import LAM0, moments, overlap, vacuum
 
 FWHM_PER_SIGMA = 2 * np.sqrt(2 * np.log(2))   # gaussian intensity

@@ -11,9 +11,12 @@ A pulse is built as  A(x, y, Om) = E(Om) * U(x, y; Om)  where
 """
 import math
 import warnings
+
 import numpy as np
-from scipy.special import eval_genlaguerre
 from scipy.constants import c as C0, femto as FS
+from scipy.special import eval_genlaguerre
+
+from .solver import UPPESolver
 
 
 # ============================================================ spectral amplitude
@@ -116,21 +119,22 @@ def top_hat(radius, order=24):
     return super_gaussian(radius, order)
 
 
-def _hermite_1d(m, x, w):
-    """Normalised 1D Hermite-Gauss function of order m (int |u|^2 dx = 1), waist w."""
+def _hermite_functions(x, w, M):
+    """Normalised 1D Hermite-Gauss functions u_m(x) (int |u_m|^2 dx = 1) of waist w for m = 0..M,
+    shape (M+1, *x.shape)."""
     xi = np.sqrt(2) * x / w
-    h0 = np.pi ** -0.25 * np.exp(-xi ** 2 / 2)
-    h1 = np.sqrt(2) * xi * h0
-    if m == 0:
-        h1 = h0
-    for j in range(1, m):
-        h0, h1 = h1, np.sqrt(2 / (j + 1)) * xi * h1 - np.sqrt(j / (j + 1)) * h0
-    return h1 * np.sqrt(np.sqrt(2) / w)
+    psi = np.zeros((M + 1,) + xi.shape)
+    psi[0] = np.pi ** -0.25 * np.exp(-xi ** 2 / 2)
+    if M >= 1:
+        psi[1] = np.sqrt(2) * xi * psi[0]
+    for m in range(1, M):
+        psi[m + 1] = np.sqrt(2 / (m + 1)) * xi * psi[m] - np.sqrt(m / (m + 1)) * psi[m - 1]
+    return psi * np.sqrt(np.sqrt(2) / w)
 
 
 def hermite_gauss(w, m, n):
     """HG_mn field of waist w (HG_00 = gaussian(w)), normalised to unit power."""
-    f = lambda X, Y: _hermite_1d(m, X, w) * _hermite_1d(n, Y, w)
+    f = lambda X, Y: _hermite_functions(X, w, m)[m] * _hermite_functions(Y, w, n)[n]
     return Profile(f, w * np.sqrt(max(m, n) + 1), f"HG{m}{n} w={w*1e3:.3g} mm")
 
 
@@ -232,6 +236,9 @@ def zernike_wavefront(X, Y, coeffs_waves, pupil_radius, lambda0):
 
 
 # ============================================================ beam = profile + aberrations + STC
+_SIZE_EXPONENT = {None: 0.0, "eigenmode": 0.5, "focus": 1.0}   # Beam(chromatic_size=...)
+
+
 class Beam:
     """Spatial part of the pulse, possibly frequency dependent.
 
@@ -251,13 +258,11 @@ class Beam:
                                   "focus" = size ~ lambda (focused / diffraction-limited beam)
     """
 
-    _SIZE_EXPONENT = {None: 0.0, "eigenmode": 0.5, "focus": 1.0}
-
     def __init__(self, profile, zernike=None, pupil_radius=None, spatial_chirp_mm_per_nm=(0.0, 0.0),
                  angular_dispersion_urad_per_nm=(0.0, 0.0), pft_fs_per_mm=(0.0, 0.0), pfc_fs_per_mm2=0.0,
                  radial_gdd_fs2_per_mm2=0.0, tilt_urad=(0.0, 0.0), offset_m=(0.0, 0.0), custom_phase=None,
                  chromatic_size=None):
-        if chromatic_size not in self._SIZE_EXPONENT:
+        if chromatic_size not in _SIZE_EXPONENT:
             raise ValueError(f"chromatic_size must be None, 'eigenmode' or 'focus', got {chromatic_size!r}")
         self.profile = profile
         self.zernike = zernike or {}
@@ -270,7 +275,7 @@ class Beam:
         self.tilt = tilt_urad
         self.off = offset_m
         self.custom = custom_phase
-        self.size_exp = self._SIZE_EXPONENT[chromatic_size]
+        self.size_exp = _SIZE_EXPONENT[chromatic_size]
         self._W = None
 
     def field(self, X, Y, omega, omega0):
@@ -368,7 +373,6 @@ class Pulse:
 
         Size the profile to the mode: for a top-hat, radius ~ 1.12 x mode radius at that plane
         maximises the overlap with the gaussian (eta = 0.815)."""
-        from .solver import UPPESolver
         z = cell.d / 2 if image_z is None else float(image_z)
         if curvature_radius is None:
             zR = cell.linear_mode(grid.lambda0)["zR"]
@@ -381,12 +385,8 @@ class Pulse:
             U = beam.field(X, Y, w, grid.omega0) * np.exp(1j * (w / C0) * r2 / (2 * curvature_radius))
             U /= np.sqrt(np.sum(np.abs(U) ** 2) * grid.dA)
             Aw[:, :, j] = E[j] * U
-        lin = UPPESolver(grid, cell.medium)
-        lin._cache.clear()
-        Aw = lin.linear(grid.asarray(Aw), -z)
-        del lin
+        Aw = UPPESolver(grid, cell.medium, cache_size=0).linear(grid.asarray(Aw), -z)
         p = cls(grid, Aw)
-        frac = grid.energy(p.Aw)
         p.set_energy(energy)
         if verbose:
             print(f"[Pulse] near field imaged at z = {z*100:.1f} cm from the centre, "

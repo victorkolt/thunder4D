@@ -9,7 +9,9 @@ near field  = the collimated beam: angular spectrum on a common angle grid theta
 """
 import numpy as np
 from scipy.constants import c as C0, femto as FS
+
 from .backend import to_host
+from .pulse import _hermite_functions, laguerre_gauss
 
 
 # ------------------------------------------------------------------ basic quantities
@@ -54,8 +56,8 @@ def temporal_power(grid, Aw):
 
 # ------------------------------------------------------------------ near field (collimated beam)
 def near_field(grid, Aw, theta_max=None, n_theta=None, idx=None, theta_y=None):
-    """Near field (collimated beam): angular spectrum E(theta_x, theta_y, Om) on a common angle grid (sorted, odd size so that
-    theta = 0 is sampled). theta_max default: half the largest kx at lambda0.
+    """Near field (collimated beam): angular spectrum E(theta_x, theta_y, Om) on a common angle grid
+    (sorted, odd size so that theta = 0 is sampled). theta_max default: half the largest kx at lambda0.
     theta_y: optional explicit theta_y values (e.g. [0.] for a single line).
     Returns (theta_x, Ef) with Ef of shape (n_theta, len(theta_y), Nt), FFT order along Om."""
     Aw = to_host(Aw)
@@ -82,9 +84,9 @@ def spectrogram_x_lambda(grid, Aw, y0=0.0, slit=None, axis="x", per_lambda=True)
     Aw = to_host(Aw)
     if axis == "y":
         Aw = np.swapaxes(Aw, 0, 1)
-        coord, other, d = grid.y, grid.x, grid.dx
+        coord, other = grid.y, grid.x
     else:
-        coord, other, d = grid.x, grid.y, grid.dy
+        coord, other = grid.x, grid.y
     if slit is None:
         sel = [int(np.argmin(np.abs(other - y0)))]
     else:
@@ -119,18 +121,6 @@ def homogeneity(grid, Aw=None, S_xyw=None, rel=1e-3):
 
 
 # ------------------------------------------------------------------ modal content
-def _hermite_functions(x, w, M):
-    """Normalised 1D HG functions u_m(x) for m = 0..M, shape (M+1, len(x))."""
-    xi = np.sqrt(2) * x / w
-    psi = np.zeros((M + 1,) + xi.shape)
-    psi[0] = np.pi ** -0.25 * np.exp(-xi ** 2 / 2)
-    if M >= 1:
-        psi[1] = np.sqrt(2) * xi * psi[0]
-    for m in range(1, M):
-        psi[m + 1] = np.sqrt(2 / (m + 1)) * xi * psi[m] - np.sqrt(m / (m + 1)) * psi[m - 1]
-    return psi * np.sqrt(np.sqrt(2) / w)
-
-
 def mode_content(grid, Aw, w0_of_lambda, max_order=6, idx=None):
     """Decomposition on Hermite-Gauss modes of waist w0(lambda) with flat phase (cell centre).
     Returns dict: lam, eta00(lam) (fundamental fraction per colour), order_frac[N] (energy fraction
@@ -163,7 +153,6 @@ def lg_mode_content(grid, Aw, w0_of_lambda, p_max=2, l_max=2, idx=None):
     phase, cell centre), spectrally integrated.
     Returns dict: p = 0..p_max, l = -l_max..l_max, frac[p, l] (fraction of the total energy in each
     mode, shape (p_max+1, 2*l_max+1)) and residual (energy outside the listed modes)."""
-    from .pulse import laguerre_gauss
     Aw = to_host(Aw)
     idx = spectral_support(grid, Aw, 1e-3) if idx is None else idx
     lam = grid.lam[idx]

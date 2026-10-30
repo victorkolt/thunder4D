@@ -1,5 +1,6 @@
 """Small helpers shared by the tests."""
 import numpy as np
+
 import thunder4d as m
 
 LAM0 = 1030e-9
