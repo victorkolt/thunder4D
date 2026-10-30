@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
+
 import thunder4d as m
+
 from helpers import LAM0, moments, vacuum
 
 K0 = 2 * np.pi / LAM0
@@ -57,7 +59,7 @@ def test_gas_dispersion_adds_the_material_gdd(through_argon):
 
 
 def test_moving_frame_removes_the_group_delay(through_argon):
-    g, gas, A_in, A_out = through_argon
+    g, _, A_in, A_out = through_argon
     assert abs(phase_fit(g, A_in, A_out)[0]) < 0.05
 
 

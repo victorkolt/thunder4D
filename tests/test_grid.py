@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
+
 import thunder4d as m
 from thunder4d.grid import _next_fast
+
 from helpers import LAM0
 
 
@@ -60,7 +62,7 @@ def test_numpy_and_scipy_backends_agree(method):
 
 
 # ------------------------------------------------------------ suggest_grid
-BAND = dict(lambda0=LAM0, lambda_min=900e-9, lambda_max=1200e-9, pulse_fwhm=200e-15)
+BAND = {"lambda0": LAM0, "lambda_min": 900e-9, "lambda_max": 1200e-9, "pulse_fwhm": 200e-15}
 
 
 @pytest.fixture
