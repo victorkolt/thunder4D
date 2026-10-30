@@ -57,3 +57,6 @@ combine-as-imports = true
 
 [tool.ty.src]
 include = ["src", "tests"]
+
+[tool.ty.analysis]
+replace-imports-with-any = ["cupy", "cupyx.**"]   # optional dependency (gpu extra)
