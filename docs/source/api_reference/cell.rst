@@ -71,9 +71,20 @@ eigenmode and the nonlinear mode matching.
 
       Text summary of the cell and, optionally, of a matching dict.
 
+   .. py:method:: mirror_spectrum(grid)
+
+      Spectral transfer of one bounce on ``grid.Omega``: GDD, TOD, reflectivity and
+      ``mirror_phase``, zero outside the valid spectral window. Shape ``(Nt,)``.
+
+   .. py:method:: mirror_aperture(r)
+
+      Amplitude transmission of the clear aperture at radius ``r`` [m] (soft super-gaussian
+      edge of order 30); ones if ``mirror_diameter`` is None.
+
    .. py:method:: bounce_factor(grid)
 
-      Complex transfer of one mirror, shape ``grid.shape`` (cached).
+      Complex transfer of one mirror, shape ``grid.shape`` (cached): curvature,
+      :meth:`mirror_spectrum` and :meth:`mirror_aperture`.
 
    .. py:method:: bounce(Aw, grid)
 

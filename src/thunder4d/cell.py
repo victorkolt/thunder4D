@@ -53,7 +53,7 @@ class MPC:
                     f"N = {N} is odd: the concentric branch is only re-entrant for even N. N is the "
                     f"number of passes of one re-entrant cycle (e.g. N = {2 * N}, k = {2 * k}); "
                     f"to simulate a different number of passes, set n_passes separately.")
-            d = R * (1+ value)
+            d = R * (1 + value)
         elif branch == "planar":
             d = R * (1 - value)
         else:
@@ -112,25 +112,29 @@ class MPC:
         return s
 
     # ------------------------------------------------------------ mirror
+    def mirror_spectrum(self, grid):
+        """Spectral transfer of one bounce on grid.Omega: GDD, TOD, reflectivity and phase."""
+        W = grid.Omega * FS
+        lam = np.where(grid.valid, grid.lam, 1.0)
+        spec = np.exp(1j * (self.gdd / 2 * W ** 2 + self.tod / 6 * W ** 3))
+        spec *= np.sqrt(np.clip(self.refl(lam), 0, 1)) if callable(self.refl) else np.sqrt(self.refl)
+        if self.mphase is not None:
+            spec *= np.exp(1j * self.mphase(lam))
+        return spec * grid.valid
+
+    def mirror_aperture(self, r):
+        """Amplitude transmission of the clear aperture at radius r (soft super-gaussian edge)."""
+        if self.diameter is None:
+            return np.ones_like(r)
+        return np.exp(-(r / (self.diameter / 2)) ** 30)
+
     def bounce_factor(self, grid):
         """Complex transfer of one mirror in (x, y, Om) (cached)."""
         if self._bounce_cache is not None and self._bounce_cache[0] is grid:
             return self._bounce_cache[1]
-        W = grid.Omega * FS
-        spec = np.exp(1j * (self.gdd / 2 * W ** 2 + self.tod / 6 * W ** 3)).astype(complex)
-        lam = grid.lam
-        if callable(self.refl):
-            spec *= np.sqrt(np.clip(self.refl(np.where(grid.valid, lam, 1.0)), 0, 1))
-        else:
-            spec *= np.sqrt(self.refl)
-        if self.mphase is not None:
-            spec *= np.exp(1j * self.mphase(np.where(grid.valid, lam, 1.0)))
-        spec *= grid.valid
         F = np.exp(-1j * (grid.r2[:, :, None] * (grid.omega / C0 / self.R)[None, None, :]))
-        F *= spec[None, None, :]
-        if self.diameter is not None:
-            ap = np.exp(-(np.sqrt(grid.r2) / (self.diameter / 2)) ** 30)
-            F *= ap[:, :, None]
+        F *= self.mirror_spectrum(grid)[None, None, :]
+        F *= self.mirror_aperture(np.sqrt(grid.r2))[:, :, None]
         F = grid.asarray(F.astype(grid.dtype))     # built on the host, stored on the grid's device
         self._bounce_cache = (grid, F)
         return F
