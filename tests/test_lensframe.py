@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
+
 import thunder4d as m
 from thunder4d import diagnostics as dg
+
 from helpers import LAM0, overlap, vacuum
 
 
@@ -17,7 +19,7 @@ def eigenmode_pulse(cell, g, energy=1e-3, w0=None):
 
 
 # ------------------------------------------------------------ suggest_lens_grid
-BAND = dict(lambda0=LAM0, lambda_min=900e-9, lambda_max=1200e-9, pulse_fwhm=200e-15)
+BAND = {"lambda0": LAM0, "lambda_min": 900e-9, "lambda_max": 1200e-9, "pulse_fwhm": 200e-15}
 
 
 def test_suggest_lens_grid_spectral_window_covers_the_band():

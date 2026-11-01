@@ -3,11 +3,14 @@
 import os
 import pickle
 import time
+from typing import Any
+
 import numpy as np
+
 from . import diagnostics as dg
 from .backend import to_host
-from .solver import UPPESolver
 from .pulse import Pulse
+from .solver import UPPESolver
 
 
 class MPCSimulation:
@@ -29,10 +32,6 @@ class MPCSimulation:
                      far field (cell centre, cut + projection), near field (collimated beam: angle,
                      cut), mirror (cut)
     profile_axis   : 'x' or 'y'
-
-    Conventions: FAR FIELD = the cell centre (focus / waist plane, where the field is recorded);
-    NEAR FIELD = the collimated beam, i.e. the angular spectrum of the cell-centre field
-    (x_out = f * theta after a collimating lens of focal length f).
 
     Conventions: FAR FIELD = the cell centre (focus / waist plane, where the field is recorded);
     NEAR FIELD = the collimated beam, i.e. the angular spectrum of the cell-centre field
@@ -87,7 +86,7 @@ class MPCSimulation:
             h["band_energy"].append(en)
             h["prof_mirror"].append(mirror_profiles)
             if self.near:
-                th, pf = dg.near_profiles_1d(g, A, self.prof_lams, self.prof_bw)
+                _, pf = dg.near_profiles_1d(g, A, self.prof_lams, self.prof_bw)
                 h["prof_near"].append(pf.astype(np.float32))       # collimated beam = near field
             self.prof_coord = xc
         else:
@@ -101,7 +100,7 @@ class MPCSimulation:
         h["spectrum"].append(S)
         h["fluence"].append(dg.fluence(g, A).astype(np.float32))
         h["fluence_mirror"].append(mirror_fluence)
-        x, lam_s, Sx = dg.spectrogram_x_lambda(g, A, slit=self.slit)
+        x, _, Sx = dg.spectrogram_x_lambda(g, A, slit=self.slit)
         h["sgram_x"].append(Sx)
         mc = dg.mode_content(g, A, self.w0_of_lambda, self.max_order)
         h["eta00"].append(np.interp(lam, mc["lam"], mc["eta00"], left=np.nan, right=np.nan))
@@ -136,18 +135,17 @@ class MPCSimulation:
         """Run n_passes (default: until cell.n_passes). max_seconds: stop cleanly after the pass
         that exceeds this wall-clock budget (combine with checkpoint/resume)."""
         n = n_passes or (self.cell.n_passes - self.passes_done)
-        d = self.cell.d
         t_start = time.time()
         for _ in range(n):
             if max_seconds is not None and time.time() - t_start > max_seconds:
                 break
             p = self.passes_done + 1
-            self.Aw = self.solver.propagate(self.Aw, d / 2)
+            self.Aw = self._to_mirror(self.Aw)
             Fm = dg.fluence(self.grid, self.Aw).astype(np.float32) if self.record_mirror else None
             Pm = self._mirror_profiles() if (self.record_mirror and self.prof_lams) else None
-            self.Aw = self.cell.bounce(self.Aw, self.grid)
+            self.Aw = self._bounce(self.Aw)
             self.Aw = self.solver.absorb(self.Aw)
-            self.Aw = self.solver.propagate(self.Aw, d / 2)
+            self.Aw = self._to_centre(self.Aw)
             self.Aw = self.solver.absorb(self.Aw, temporal=True)
             self.passes_done = p
             if p % self.record_every == 0 or p == self.cell.n_passes:
@@ -160,6 +158,16 @@ class MPCSimulation:
                           f"M2 = {h['M2x_mean'][-1]:.3f}/{h['M2y_mean'][-1]:.3f} | "
                           f"steps {self.solver.nsteps} | {h['wall_s'][-1]:.0f} s", flush=True)
         return self
+
+    # one pass = centre -> mirror, bounce, mirror -> centre (LensFrameSimulation overrides these three)
+    def _to_mirror(self, Aw):
+        return self.solver.propagate(Aw, self.cell.d / 2)
+
+    def _bounce(self, Aw):
+        return self.cell.bounce(Aw, self.grid)
+
+    def _to_centre(self, Aw):
+        return self.solver.propagate(Aw, self.cell.d / 2)
 
     @property
     def done(self):
@@ -192,7 +200,7 @@ class MPCSimulation:
     def save(self, path, include_field=True):
         """Everything in one .npz (reduced diagnostics + final field)."""
         h = self.history
-        out = {"lam": self.lam, "x": self.x, "t": self.grid.ts,
+        out: dict[str, Any] = {"lam": self.lam, "x": self.x, "t": self.grid.ts,
                "theta": getattr(self, "theta", np.array([])),
                "R": self.cell.R, "d": self.cell.d, "n_passes": self.cell.n_passes,
                "gas": self.cell.medium.name, "pressure_bar": self.cell.medium.p,

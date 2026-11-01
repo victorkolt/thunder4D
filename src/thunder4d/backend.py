@@ -15,7 +15,7 @@ def _windows_nvidia_dlls():
     """On Windows, make the CUDA DLLs installed by pip or uv (nvidia-*-cu12 packages) findable by CuPy."""
     if sys.platform != "win32":
         return
-    roots = set(getattr(site, "getsitepackages", lambda: [])())
+    roots = set(getattr(site, "getsitepackages", list)())
     roots.add(site.getusersitepackages())
     roots.add(os.path.join(sys.prefix, "Lib", "site-packages"))
     for root in roots:
@@ -48,7 +48,7 @@ def gpu_available():
             cp.vdot(a, a)                       # needs cuBLAS
             float(cp.sum(cp.abs(a) ** 2))       # compiles a kernel: fails on unsupported GPUs
             _GPU_OK = True
-        except Exception as e:
+        except Exception as e:                  # noqa: BLE001  any failure means no usable GPU
             _GPU_OK = False
             _GPU_ERR = f"{type(e).__name__}: {e}"
     return _GPU_OK

@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
+
 import thunder4d as m
 from thunder4d.backend import resolve_device, to_host
+
 from helpers import LAM0
 
 needs_gpu = pytest.mark.skipif(not m.gpu_available(), reason="needs CuPy and a CUDA GPU")

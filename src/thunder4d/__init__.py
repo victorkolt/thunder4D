@@ -3,16 +3,31 @@
 4D (x, y, z, t) UPPE simulation of multipass cells.
 """
 from importlib.metadata import version
-__version__ = version("thunder4d")
-from .backend import gpu_available, to_host
-from .grid import Grid, suggest_grid, C0
-from .materials import Material
-from .pulse import (Pulse, Beam, gaussian, super_gaussian, top_hat, knife_edge, measured_profile,
-                    hermite_gauss, laguerre_gauss, mode_superposition,
-                    gaussian_spectrum, measured_spectrum, spectrum_from_temporal_field,
-                    add_spectral_phase, zernike_wavefront)
-from .cell import MPC
-from .solver import UPPESolver
-from .simulation import MPCSimulation
+
 from . import diagnostics
-from .lensframe import LensFrameSimulation, LensFrameSolver, suggest_lens_grid, lens_frame_scale, imaged_near_field_lens
+from .backend import gpu_available, to_host
+from .cell import MPC
+from .grid import C0, Grid, suggest_grid
+from .lensframe import LensFrameSimulation, LensFrameSolver, imaged_near_field_lens, lens_frame_scale, suggest_lens_grid
+from .materials import Material
+from .pulse import (
+    Beam,
+    Pulse,
+    add_spectral_phase,
+    gaussian,
+    gaussian_spectrum,
+    hermite_gauss,
+    knife_edge,
+    laguerre_gauss,
+    measured_profile,
+    measured_spectrum,
+    mode_superposition,
+    spectrum_from_temporal_field,
+    super_gaussian,
+    top_hat,
+    zernike_wavefront,
+)
+from .simulation import MPCSimulation
+from .solver import UPPESolver
+
+__version__ = version("thunder4d")

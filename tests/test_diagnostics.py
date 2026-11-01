@@ -1,7 +1,9 @@
 import numpy as np
 import pytest
+
 import thunder4d as m
 from thunder4d import diagnostics as dg
+
 from helpers import LAM0, moments
 
 W = 100e-6

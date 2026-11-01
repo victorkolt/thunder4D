@@ -24,6 +24,18 @@ Each test checks one property (a convention, a normalisation or one physical ter
 The suite runs in about 20 s. The GPU test is skipped when CuPy has no CUDA device.
 Every pull request runs the tests (`.github/workflows/tests.yml`, Python 3.10 and 3.14) and builds the documentation.
 
+## Lint and type check
+
+```bash
+uv run ruff check          # add --fix for the automatic fixes (import order, whitespace, ...)
+uv run ty check            # type check of src/ and tests/
+```
+
+The configuration is in `pyproject.toml`.
+ruff uses its default rules, plus line length (120) and whitespace; the code is not run through a formatter.
+The notebooks and `benchmark/` are excluded for now.
+Every pull request runs both (`.github/workflows/lint.yml`).
+
 ## Documentation
 
 The documentation is written with [Sphinx](https://www.sphinx-doc.org) and the Read the Docs theme.

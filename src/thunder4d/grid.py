@@ -12,15 +12,20 @@ Conventions (read this once, everything else follows)
   grid.shift_xy(), grid.shift_w() for plotting.
 * The solver's home domain is (x, y, Om): complex arrays of shape (Nx, Ny, Nt).
 """
+from typing import Any
+
 import numpy as np
 import scipy.fft
 from scipy.constants import c as C0
-from .backend import resolve_device, get_xp, xp_of
+
+from .backend import get_xp, resolve_device, xp_of
 
 
 class FFT:
     """Thin wrapper so the backend can be switched (scipy default, numpy, or cupyx on the GPU).
     The arrays passed in must live on the device of the backend (host for scipy/numpy)."""
+
+    mod: Any   # scipy.fft, numpy.fft or cupyx.scipy.fft: same interface, no common type
 
     def __init__(self, backend="auto", workers=None, device="cpu"):
         if device == "gpu":
@@ -178,6 +183,12 @@ def suggest_grid(cell, lambda0, lambda_min, lambda_max, pulse_fwhm, *, box_facto
     dx_waist = w0 / points_per_waist
     dx_curv = 0.8 * lambda_min * cell.R / (np.sqrt(2) * L)
     dx = min(dx_waist, dx_curv)
+    return _sized_grid(L, dx, lambda0, lambda_min, lambda_max, pulse_fwhm, time_window_factor, **grid_kw)
+
+
+def _sized_grid(L, dx, lambda0, lambda_min, lambda_max, pulse_fwhm, time_window_factor, **grid_kw):
+    """Grid of width L with a step <= dx, spectral window [lambda_min, lambda_max] and
+    time window >= time_window_factor x pulse_fwhm (shared by suggest_grid and suggest_lens_grid)."""
     Nx = _next_fast(L / dx)
     w_hi = 2 * np.pi * C0 / lambda_min - 2 * np.pi * C0 / lambda0
     w_lo = 2 * np.pi * C0 / lambda0 - 2 * np.pi * C0 / lambda_max

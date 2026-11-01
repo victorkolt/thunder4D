@@ -7,8 +7,9 @@ Outputs: figures in ./out_<name>/ and a run_<name>.npz with the per-pass history
 """
 import os
 import sys
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 import thunder4d as m
 from thunder4d import diagnostics as dg
