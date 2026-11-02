@@ -156,6 +156,20 @@ def fourier_limit(grid, E_pix, up=4):
     return integrated_power(grid, np.sqrt(S)[None, :], None, up)
 
 
+def fourier_limit_of_spectrum(lam_nm, S, n=2 ** 15):
+    """FWHM [fs] of the Fourier limit of a spectrum S(lambda) given per unit wavelength (as a
+    spectrometer measures it): converted to per unit frequency (x lambda^2), flat phase."""
+    c = 299.792458                                                  # nm/fs
+    order = np.argsort(lam_nm)
+    lam_nm, S = np.asarray(lam_nm, float)[order], np.clip(np.asarray(S, float)[order], 0, None)
+    w = np.linspace(0, 8 * np.pi * c / lam_nm[0], n, endpoint=False)   # 4 x the highest frequency
+    lw = 2 * np.pi * c / np.maximum(w, 1e-12)
+    Sw = np.interp(lw, lam_nm, S, left=0, right=0) * lw ** 2
+    e = np.fft.fftshift(np.fft.ifft(np.sqrt(Sw)))
+    t = np.fft.fftshift(np.fft.fftfreq(n, w[1] / (2 * np.pi)))
+    return fwhm(t, np.abs(e) ** 2)
+
+
 def best_phase(grid, E_pix, phase_of, bounds, n_scan=61, n_golden=30, up=4):
     """Parameter p in `bounds` maximising the peak power after phase_of(p): coarse scan then
     golden section. Returns (p_best, scan values, peak powers of the scan)."""
@@ -225,8 +239,10 @@ def spectral_similarity(la, Sa, lb, Sb):
                  / (np.trapezoid(Sa, la) * np.trapezoid(Sb, la)))
 
 
-def load_digitized(path):
-    """Optional curve digitised from a paper figure: CSV with 2 columns (x, y), y normalised."""
+def load_digitized(path, normalise=True):
+    """Optional curve digitised from a paper figure: CSV with 2 columns (x, y), lines starting with
+    '#' are comments (source, units). y is normalised to its maximum unless normalise=False
+    (e.g. a spectral phase in rad). Returns None if the file does not exist."""
     if not path:
         return None
     path = path if os.path.isabs(path) else os.path.join(HERE, path)
@@ -234,7 +250,7 @@ def load_digitized(path):
         return None
     d = np.loadtxt(path, delimiter=",")
     d = d[np.argsort(d[:, 0])]
-    return d[:, 0], d[:, 1] / d[:, 1].max()
+    return d[:, 0], (d[:, 1] / d[:, 1].max() if normalise else d[:, 1])
 
 
 def _git_commit():
@@ -278,7 +294,10 @@ class Benchmark:
     paper = {}                        # {"citation": ..., "doi": ..., "url": ...}
     params = {}                       # physical parameters; any of them can be changed with --set
     reference = {}                    # {metric name: Ref(...)}
-    measured = {}                     # optional digitised curves: {"spectrum": "data/....csv"}
+    measured = {}                     # optional digitised curves: {"spectrum": "data/....csv",
+    #                                   "pulse": "data/....csv"} (see data/ for the format)
+    calibrated = {}                   # parameters set to an effective value instead of the paper's:
+    #                                   {"energy": {"paper": 290e-6, "note": "why"}}; shown in the report
 
     # grid: presets for suggest_lens_grid, finest first; the finest that fits in memory is used
     presets = [dict(box_factor=8, points_per_waist=8, time_window_factor=8),
@@ -422,12 +441,18 @@ class Benchmark:
             M["similarity_measured"] = metric(spectral_similarity(meas[0], meas[1], lam * 1e9, S / S.max()),
                                               "", "spectral similarity with the measurement",
                                               R("similarity_measured"))
+            M["ftl_measured_fs"] = metric(fourier_limit_of_spectrum(*meas), "fs",
+                                          "Fourier limit of the measured (digitised) spectrum")
 
         # --- compression
         Epix = beam_pixels(sim.Aw)
         t_tl, P_tl = fourier_limit(grid, Epix, up)
         M["ftl_fs"] = metric(fwhm(t_tl, P_tl), "fs", "Fourier limit (integrated spectrum)", R("ftl_fs"))
         C["t_tl_fs"], C["P_tl"] = t_tl, P_tl
+        mp = load_digitized(self.measured.get("pulse"))
+        if mp is not None:
+            C["t_meas_fs"], C["P_meas"] = mp[0] - mp[0][np.argmax(mp[1])], mp[1]
+            M["fwhm_measured_pulse_fs"] = metric(fwhm(*mp), "fs", "FWHM of the measured (digitised) pulse")
         cg = P.get("compressor_gdd")
         if cg is not None:
             t_c, P_c = integrated_power(grid, Epix, spectral_phase(grid, wc, cg), up)
@@ -539,6 +564,7 @@ class Benchmark:
                     "nsteps": sim.solver.nsteps, "command": " ".join(sys.argv), **_jsonable(settings)},
             "params": _jsonable(P),
             "overrides": _jsonable(args.overrides),
+            "calibrated": _jsonable(self.calibrated),
             "metrics": M,
         }
         with open(os.path.join(run_dir, "results.json"), "w") as f:

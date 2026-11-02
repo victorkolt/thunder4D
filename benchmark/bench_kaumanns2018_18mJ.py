@@ -46,7 +46,7 @@ class Kaumanns2018(Benchmark):
         band=(955e-9, 1110e-9),  # assumption
         compressor_gdd=-9400.0,  # paper
         phi_fit=55.0,            # paper: phase of the SPM model fitted to the measured spectrum
-        lambda_min=960e-9, lambda_max=1110e-9,
+        lambda_min=930e-9, lambda_max=1140e-9,   # grid window, wider than the mirror band
         injection="linear",
     )
     reference = {
@@ -60,7 +60,7 @@ class Kaumanns2018(Benchmark):
         "best_gdd_fs2": Ref(-9400, 0.15),
         "M2x": Ref(1.17, kind="max"),
         "M2y": Ref(1.18, kind="max"),
-        "V_weighted_x": Ref(0.967, 0.02, kind="abs"),
+        "V_weighted_x": Ref(0.967, kind="min", note="measured; the ideal cell can only do better"),
         "B_rad": Ref(55, kind="info", note="55 (fit), 59 +- 6"),
         "similarity_spm_model": Ref(1.0, 0.05, kind="abs"),
     }

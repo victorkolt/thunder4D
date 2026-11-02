@@ -7,22 +7,29 @@
     python analyze.py --compare RUN_A RUN_B            # two runs side by side (convergence checks)
     python analyze.py --sweep daniault2024_4fs pressure_bar rms_width_nm ftl_fs comp_fs
     python analyze.py --plot                           # standard figure of each selected run
+    python analyze.py --promote RUN [RUN ...]          # make runs the reference of their benchmark
+    python analyze.py --report                         # reference/REPORT.md + figures (all benchmarks)
 
-RUN_A / RUN_B are run directories or run ids (e.g. run_1d6084c5). Works the same for any benchmark
+RUN_A / RUN_B / RUN are run directories or run ids (e.g. run_1d6084c5). Works the same for any benchmark
 built on framework.Benchmark, since every run stores the same metric names and curve names.
 """
 import argparse
 import csv
+import datetime
 import glob
+import importlib.util
 import json
 import os
+import shutil
 import sys
 
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from framework import format_value, print_table   # noqa: E402
+from framework import Benchmark, Ref, format_value, print_table   # noqa: E402
+
+REF_ROOT = os.path.join(HERE, "reference")     # committed reference runs: reference/<benchmark>/
 
 
 # ---------------------------------------------------------------- loading
@@ -142,7 +149,7 @@ def write_csv(runs, path):
 
 
 # ---------------------------------------------------------------- standard figure
-def plot_run(r, show=False):
+def plot_run(r, show=False, out=None):
     import matplotlib.pyplot as plt
     C = np.load(os.path.join(r["_dir"], "curves.npz"))
     M = r["metrics"]
@@ -187,6 +194,10 @@ def plot_run(r, show=False):
                label=f"paper compressor {format_value(M['comp_fs']['value'])} fs")
     a.plot(cen(C["t_best_fs"], C["P_best"]), C["P_best"] / norm, "--",
            label=f"best GDD {format_value(M['best_comp_fs']['value'])} fs")
+    if "P_meas" in C:                                      # shape comparison: peak matched
+        top = (C["P_comp"].max() if "P_comp" in C else C["P_best"].max()) / norm
+        a.plot(C["t_meas_fs"], C["P_meas"] / C["P_meas"].max() * top, "k-", lw=1, alpha=0.7,
+               label=f"measured (digitised) {format_value(M['fwhm_measured_pulse_fs']['value'])} fs")
     w = 4 * M["ftl_fs"]["value"]
     a.set_xlim(-w, w); a.set_xlabel("time (fs)"); a.set_ylabel("power / Fourier limit"); a.legend(fontsize=8)
 
@@ -205,12 +216,188 @@ def plot_run(r, show=False):
         a.plot(x, F[:, F.shape[1] // 2], label="cut y = 0")
         a.set_xlabel("x on the mirror (mm)"); a.set_ylabel("fluence (J/cm2)")
         a.set_title(f"last mirror, max over run {format_value(M['F_mirror_max_Jcm2']['value'])} J/cm2", fontsize=9)
-    out = os.path.join(r["_dir"], "summary.png")
+    out = out or os.path.join(r["_dir"], "summary.png")
     fig.savefig(out, dpi=110)
     print("figure:", out)
     if show:
         plt.show()
     plt.close(fig)
+
+
+# ---------------------------------------------------------------- reference runs and report
+def bench_classes():
+    """{benchmark name: Benchmark subclass}, imported from the bench_*.py scripts."""
+    out = {}
+    for fn in sorted(glob.glob(os.path.join(HERE, "bench_*.py"))):
+        spec = importlib.util.spec_from_file_location(os.path.basename(fn)[:-3], fn)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for v in vars(mod).values():
+            if isinstance(v, type) and issubclass(v, Benchmark) and v is not Benchmark:
+                out[v.name] = v
+    return out
+
+
+def rescore(r, cls):
+    """Re-check the stored metrics against the reference values of the current script, so that a
+    change of a Ref does not need a new run. Metrics the script has no Ref for keep their status."""
+    if cls is None:
+        return r
+    for k, ref in cls.reference.items():
+        m = r["metrics"].get(k)
+        if m is None:
+            continue
+        m["ref"] = {"value": ref.value, "tol": ref.tol, "kind": ref.kind, "note": ref.note}
+        m["status"], m["deviation"] = ref.status(m["value"]), ref.deviation(m["value"])
+    if not r.get("calibrated"):
+        r["calibrated"] = cls.calibrated
+    return r
+
+
+def promote(root, keys, force=False):
+    """Copy runs to reference/<benchmark>/ (results.json + curves.npz), replacing the previous one."""
+    for key in keys:
+        r = find_run(root, key)
+        if not r["run"]["finished"]:
+            sys.exit(f"{key}: the run is not finished")
+        if r["run"].get("quick") and not force:
+            sys.exit(f"{key}: quick run (use --force to promote it anyway)")
+        dest = os.path.join(REF_ROOT, r["benchmark"])
+        os.makedirs(dest, exist_ok=True)
+        shutil.copy(os.path.join(r["_dir"], "curves.npz"), dest)
+        with open(os.path.join(r["_dir"], "results.json")) as f:
+            res = json.load(f)
+        res["run"]["promoted"] = datetime.datetime.now().isoformat(timespec="seconds")
+        with open(os.path.join(dest, "results.json"), "w") as f:
+            json.dump(res, f, indent=1)
+        print(f"{r['benchmark']}: {r['run']['id']} -> {os.path.relpath(dest, HERE)}")
+
+
+def load_reference(names=None):
+    classes = bench_classes()
+    runs = []
+    for fn in sorted(glob.glob(os.path.join(REF_ROOT, "*", "results.json"))):
+        with open(fn) as f:
+            r = json.load(f)
+        r["_dir"] = os.path.dirname(fn)
+        if names and r["benchmark"] not in names:
+            continue
+        runs.append(rescore(r, classes.get(r["benchmark"])))
+    return runs
+
+
+CHECKED = ("rel", "abs", "min", "max")
+NUMERICAL = ("edge_fraction",)                 # numerical checks, not compared with the paper
+ALWAYS_SHOWN = ("similarity_measured", "ftl_measured_fs", "fwhm_measured_pulse_fs", "similarity_spm_model")
+
+
+def plot_deviations(runs, out, clip=60):
+    """One row per checked metric of every benchmark: deviation from the paper (%), with the
+    tolerance as a band (rel/abs) or a half-plane (min/max)."""
+    import matplotlib.pyplot as plt
+    rows = [(r, k, m) for r in runs for k, m in r["metrics"].items()
+            if m.get("ref") and m["ref"]["kind"] in CHECKED and m.get("deviation") is not None
+            and k not in NUMERICAL]
+    fig, ax = plt.subplots(figsize=(8, 0.32 * len(rows) + 1.2), layout="constrained")
+    for i, (r, k, m) in enumerate(rows):
+        ref, d = m["ref"], 100 * m["deviation"]
+        kind = ref["kind"]
+        if kind == "rel":
+            lo, hi = -100 * ref["tol"], 100 * ref["tol"]
+        elif kind == "abs":
+            lo, hi = -100 * ref["tol"] / abs(ref["value"]), 100 * ref["tol"] / abs(ref["value"])
+        elif kind == "max":
+            lo, hi = -clip, 0
+        else:
+            lo, hi = 0, clip
+        ax.fill_betweenx([i - 0.35, i + 0.35], max(lo, -clip), min(hi, clip), color="0.85", lw=0)
+        ok = m["status"] == "ok"
+        x = float(np.clip(d, -clip, clip))
+        ax.plot(x, i, "o" if abs(d) <= clip else (">" if d > 0 else "<"), color="tab:green" if ok else "tab:red")
+        if abs(d) > clip:
+            ax.annotate(f"{d:+.0f}%", (x, i), xytext=(-28 if d > 0 else 6, -3), textcoords="offset points",
+                        fontsize=7)
+    for i in range(1, len(rows)):                          # separate the benchmarks
+        if rows[i][0] is not rows[i - 1][0]:
+            ax.axhline(i - 0.5, color="0.5", lw=0.8)
+    ax.axvline(0, color="k", lw=0.8)
+    ax.set_yticks(range(len(rows)), [f"{r['benchmark']}: {k}" for r, k, _ in rows], fontsize=8)
+    ax.invert_yaxis()
+    ax.set_xlim(-clip - 5, clip + 5)
+    ax.set_xlabel("deviation from the paper (%)   [grey: tolerance]")
+    fig.savefig(out, dpi=120)
+    plt.close(fig)
+
+
+def _cell(r, k, scale=1.0, digits=None):
+    m = r["metrics"].get(k)
+    if m is None or m["value"] is None:
+        return "-"
+    v = m["value"] * scale
+    s = f"{v:.{digits}f}" if digits is not None else format_value(v)
+    ref = m.get("ref") or {}
+    if ref.get("value") is not None:
+        rv = ref["value"] * scale
+        s += f" ({'< ' if ref['kind'] == 'max' else '> ' if ref['kind'] == 'min' else ''}"
+        s += f"{rv:.{digits}f})" if digits is not None else f"{format_value(rv)})"
+    if m.get("status") == "off":
+        s = f"**{s}**"
+    return s
+
+
+def write_report(runs, out_dir=REF_ROOT):
+    """REPORT.md, deviations.png and <benchmark>/summary.png from the reference runs."""
+    os.makedirs(out_dir, exist_ok=True)
+    plot_deviations(runs, os.path.join(out_dir, "deviations.png"))
+    for r in runs:
+        plot_run(r, out=os.path.join(r["_dir"], "summary.png"))
+    L = ["# Benchmark report", "",
+         f"Generated by `python analyze.py --report` on {datetime.date.today().isoformat()} from the "
+         "reference runs in `benchmark/reference/`. Reference values and tolerances are those of the "
+         "current benchmark scripts. Values are given as *simulation (paper)*; values outside the "
+         "tolerance are in bold.", "",
+         "| benchmark | grid | time | checks ok / off | Fourier limit (fs) | compressed (fs) | "
+         "transmission | M² x | homogeneity |",
+         "|---|---|---|---|---|---|---|---|---|"]
+    for r in runs:
+        ok, off = score(r)
+        u = r["run"]
+        L.append(f"| [{r['benchmark']}](#{r['benchmark'].lower()}) | {'×'.join(map(str, u['grid_shape']))} | "
+                 f"{u['wall_s'] / 60:.0f} min ({u['device']}) | {ok} / {off} | {_cell(r, 'ftl_fs', digits=1)} | "
+                 f"{_cell(r, 'comp_fs', digits=1)} | {_cell(r, 'transmission', digits=3)} | "
+                 f"{_cell(r, 'M2x', digits=2)} | {_cell(r, 'V_weighted_x', digits=3)} |")
+    L += ["", "![Deviation of every checked metric from the paper](deviations.png)", ""]
+    for r in runs:
+        u, p = r["run"], r.get("paper", {})
+        L += [f"## {r['benchmark']}", "", f"**{r['title']}**", ""]
+        link = f"https://doi.org/{p['doi']}" if p.get("doi") else p.get("url")
+        L.append(f"- Paper: {p.get('citation', '-')}" + (f" ([link]({link}))" if link else ""))
+        L.append(f"- Run: `{u['id']}`, {u['date'][:10]}, thunder4d {u['thunder4d']} (git {u['git']}), "
+                 f"{u['device']}, grid {'×'.join(map(str, u['grid_shape']))}, phi_max {u.get('phi_max')}, "
+                 f"{u['passes_done']} passes in {u['wall_s'] / 60:.1f} min")
+        for k, c in (r.get("calibrated") or {}).items():
+            L.append(f"- Calibrated: `{k}` = {format_value(float(r['params'][k]))} instead of "
+                     f"{format_value(float(c['paper']))} (paper): {c.get('note', '')}")
+        if r.get("overrides"):
+            L.append(f"- Overrides: `{json.dumps(r['overrides'])}`")
+        L += ["", f"![{r['benchmark']}]({r['benchmark']}/summary.png)", "",
+              "| metric | simulation | paper | deviation | status | description |", "|---|---|---|---|---|---|"]
+        for k, m in r["metrics"].items():
+            ref = m.get("ref")
+            if k in ALWAYS_SHOWN and not ref:
+                ref = {"value": None, "tol": None, "kind": "info", "note": ""}
+            if not ref or (ref["value"] is None and not ref.get("note") and k not in ALWAYS_SHOWN):
+                continue
+            rtxt = Ref(**ref).text()
+            dev = f"{100 * m['deviation']:+.0f} %" if m.get("deviation") is not None else ""
+            st = {"off": "**off**"}.get(m["status"], m["status"])
+            L.append(f"| `{k}` | {format_value(m['value'], m['unit'])} {m['unit']} | {rtxt} | {dev} | {st} | "
+                     f"{m['label']}{' (' + ref['note'] + ')' if ref.get('note') else ''} |")
+        L.append("")
+    path = os.path.join(out_dir, "REPORT.md")
+    with open(path, "w") as f:
+        f.write("\n".join(L))
+    print("written:", os.path.relpath(path, HERE))
 
 
 # ---------------------------------------------------------------- main
@@ -227,7 +414,20 @@ def main(argv=None):
                    help="benchmark, parameter, then metric names")
     p.add_argument("--plot", action="store_true", help="standard figure (summary.png in each run directory)")
     p.add_argument("--show", action="store_true", help="also open the figures")
+    p.add_argument("--promote", nargs="+", metavar="RUN", help="make these runs the references")
+    p.add_argument("--force", action="store_true", help="--promote: accept quick runs")
+    p.add_argument("--report", action="store_true", help="reference/REPORT.md from the reference runs")
     a = p.parse_args(argv)
+
+    if a.promote:
+        promote(a.root, a.promote, a.force)
+        return
+    if a.report:
+        runs = load_reference(a.benchmarks or None)
+        if not runs:
+            sys.exit(f"no reference runs in {REF_ROOT}: promote some with --promote RUN")
+        write_report(runs)
+        return
 
     if a.compare:
         compare(find_run(a.root, a.compare[0]), find_run(a.root, a.compare[1]))

@@ -60,7 +60,7 @@ class Grebing2020(Benchmark):
         "transmission": Ref(0.96, 0.03, kind="abs", note="cell + compressor in the paper"),
         "M2x": Ref(1.15, kind="max"),
         "M2y": Ref(1.15, kind="max"),
-        "V_weighted_x": Ref(0.987, 0.015, kind="abs"),
+        "V_weighted_x": Ref(0.987, kind="min", note="measured; the ideal cell can only do better"),
         "B_rad": Ref(13, kind="info", note="~13 beam-averaged"),
     }
     measured = {"spectrum": "data/grebing2020_spectrum.csv"}    # optional, digitised Fig. 2 (nm, I)

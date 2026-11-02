@@ -8,8 +8,7 @@ stored and analysed the same way.
 |---|---|---|
 | `bench_grebing2020_1mJ.py` | Grebing *et al.*, Opt. Lett. 45, 6250 (2020) | 1 mJ, 200 fs, Ar, P/Pc ≈ 0.2 |
 | `bench_kaumanns2018_18mJ.py` | Kaumanns *et al.*, Opt. Lett. 43, 5877 (2018) | 18 mJ, 1.3 ps, Ar, P/Pc ≈ 0.5, ~55 rad |
-| `bench_daniault2024_4fs.py` | Daniault *et al.*, Opt. Lett. (2024) | 6.7 mJ, 35 fs → 4 fs, He, P/Pc ≈ 0.74 |
-| `lens_frame_check.py` | – | lens frame vs standard solver (numerical check) |
+| `bench_rueda2021_8fs.py` | Rueda *et al.*, Opt. Express 29, 27004 (2021) | 0.29 mJ, 42 fs → 8 fs, Ar, 11 passes, P/Pc ≈ 0.5 (effective energy) |
 
 ## Running
 
@@ -79,7 +78,7 @@ python analyze.py kaumanns2018_18mJ --all-metrics    # one benchmark, every metr
 python analyze.py --latest --csv summary.csv         # one row per metric, for a spreadsheet
 python analyze.py --latest --plot                    # summary.png in each run directory
 python analyze.py --compare run_1d6084c5 phi01_8a2c11f0   # two runs side by side (convergence)
-python analyze.py --sweep daniault2024_4fs pressure_bar rms_width_nm ftl_fs comp_fs --plot
+python analyze.py --sweep rueda2021_8fs energy ftl_fs comp_fs broadening_1e --plot
 ```
 
 Quick runs are ignored unless `--quick` is given.
@@ -97,16 +96,49 @@ python analyze.py --compare <ref run id> <phi01 run id>
 python bench_kaumanns2018_18mJ.py --label n2lo --set n2_1bar=0.9e-23
 python bench_kaumanns2018_18mJ.py --label n2hi --set n2_1bar=1.1e-23
 
-# pressure scan of Daniault Fig. 2, one GPU per run
-for p in 0.4 0.8 1.2 1.5 1.8 2.0 2.2; do
-  python bench_daniault2024_4fs.py --set pressure_bar=$p --label p$p --gpu-id 0
+# energy scan of Rueda: effective energy factor of the authors' simulation (0.5) up to nominal
+for e in 1.0e-4 1.45e-4 1.9e-4 2.4e-4 2.9e-4; do
+  python bench_rueda2021_8fs.py --set energy=$e --label e$e
 done
-python analyze.py --sweep daniault2024_4fs pressure_bar rms_width_nm ftl_fs comp_fs comp_peak_ratio V_min_e2 --plot
+python analyze.py --sweep rueda2021_8fs energy ftl_fs comp_fs broadening_1e I_peak_max_Wcm2 --plot
 ```
 
-Digitised measurements are optional: put CSV files (x, y) in `data/` with the names given in each
-script's `measured` dict (e.g. `data/grebing2020_spectrum.csv`, wavelength in nm, linear intensity)
-and they are overlaid and scored automatically.
+## Measured data
+
+Curves digitised from the papers live in `data/`, one CSV per curve, named
+`<author><year>_<quantity>.csv` and listed in each script's `measured` dict. Two comma-separated
+columns, no header; lines starting with `#` give the source (paper, figure, curve), the units and the
+date of digitisation:
+
+```
+# Rueda et al., Opt. Express 29, 27004 (2021), doi:10.1364/OE.435086 (open access)
+# Fig. 3a, output spectrum after the MPC (solid blue), digitised 2026-11-01
+# columns: wavelength (nm), intensity (linear, normalised to 1), as digitised (no baseline removed)
+588.18,0.00289
+```
+
+| key in `measured` | columns | used for |
+|---|---|---|
+| `spectrum` | wavelength (nm), linear intensity | overlay, `similarity_measured`, `ftl_measured_fs` |
+| `pulse` | time (fs), power | overlay on the compressed pulses, `fwhm_measured_pulse_fs` |
+
+Spectra must be linear (convert log-scale figures before saving). Missing files are simply skipped.
+
+## Reference runs and report
+
+`results/` is not committed. The run that represents a benchmark is copied to `reference/`, which is:
+
+```bash
+python analyze.py --promote <run id> [<run id> ...]   # reference/<benchmark>/results.json + curves.npz
+python analyze.py --report                            # reference/REPORT.md, deviations.png, */summary.png
+```
+
+`--promote` refuses unfinished runs and quick runs (`--force` to override) and replaces the previous
+reference of that benchmark. `--report` re-checks the stored metrics against the `reference` values of
+the current scripts, so changing a tolerance does not need a new run. The report contains a summary
+table of all benchmarks, a figure of the deviation of every checked metric from the paper with its
+tolerance, and one section per benchmark (run details, calibrated parameters, standard figure, every
+metric with a reference). Commit `reference/` after running both commands.
 
 ## Adding a benchmark
 
@@ -125,7 +157,8 @@ class Smith2027(Benchmark):
                   lambda_min=950e-9, lambda_max=1120e-9, injection="linear")
     reference = {"ftl_fs": Ref(40, 0.1), "transmission": Ref(0.95, 0.02, kind="abs"),
                  "M2x": Ref(1.2, kind="max")}
-    measured = {"spectrum": "data/smith2027_spectrum.csv"}     # optional
+    measured = {"spectrum": "data/smith2027_spectrum.csv"}     # optional, see "Measured data"
+    calibrated = {"energy": {"paper": 12e-3, "note": "why"}}    # only if a parameter is not the paper's
 
     def make_cell(self, P, n_passes):
         gas = th.Material(P["gas"], P["pressure_bar"], n2_1bar=P["n2_1bar"])
