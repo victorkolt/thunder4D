@@ -21,6 +21,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "matplotlib>=3.10.9",
     "numpy>=2.0",
     "scipy>=1.10",
 ]

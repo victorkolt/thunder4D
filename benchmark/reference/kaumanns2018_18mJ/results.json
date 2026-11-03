@@ -1,0 +1,366 @@
+{
+ "schema": 1,
+ "benchmark": "kaumanns2018_18mJ",
+ "title": "18 mJ, 1.3 ps, Ar 600 mbar, 45 passes (Kaumanns et al., Opt. Lett. 43, 5877, 2018)",
+ "paper": {
+  "citation": "M. Kaumanns et al., Opt. Lett. 43, 5877 (2018)",
+  "doi": "10.1364/OL.43.005877"
+ },
+ "run": {
+  "id": "run_cfbe2a38",
+  "label": null,
+  "date": "2026-11-01T20:54:36",
+  "thunder4d": "0.10.0",
+  "git": "3380a8d",
+  "python": "3.13.6",
+  "device": "cpu",
+  "fft": "scipy",
+  "solver": "LensFrameSimulation",
+  "grid_shape": [
+   72,
+   72,
+   500
+  ],
+  "grid": "Grid 72x72x500 (21 MB per field, cpu/scipy) | box 1.54 x 1.54 mm, dx = 21.4 um | T = 7956 fs, dt = 15.91 fs | lambda window 930-1155 nm",
+  "dx_um": 21.398880654655624,
+  "dt_fs": 15.912148130157403,
+  "mirror_scale": 14.63850109422811,
+  "finished": true,
+  "passes_done": 45,
+  "wall_s": 739.1379590034485,
+  "nsteps": 5084,
+  "command": ".\\bench_kaumanns2018_18mJ.py --set energy=12e-3",
+  "phi_max": 0.02,
+  "gouy_step": 0.05,
+  "quick": false,
+  "n_passes": 45,
+  "preset": {
+   "box_factor": 8,
+   "points_per_waist": 8,
+   "time_window_factor": 6
+  },
+  "record_every": 5,
+  "promoted": "2026-11-03T09:09:40"
+ },
+ "params": {
+  "lambda0": 1.03e-06,
+  "energy": 0.012,
+  "fwhm": 1.3e-12,
+  "gas": "Ar",
+  "pressure_bar": 0.6,
+  "n2_1bar": 1e-23,
+  "R": 1.5,
+  "d": 2.986,
+  "n_passes": 45,
+  "mirror_R": 0.999,
+  "band": [
+   9.55e-07,
+   1.11e-06
+  ],
+  "compressor_gdd": -9400.0,
+  "phi_fit": 55.0,
+  "lambda_min": 9.3e-07,
+  "lambda_max": 1.14e-06,
+  "injection": "linear"
+ },
+ "overrides": {
+  "energy": 0.012
+ },
+ "calibrated": {},
+ "metrics": {
+  "w0_um": {
+   "value": 183.06264064367963,
+   "unit": "um",
+   "label": "linear eigenmode waist (1/e2 radius)",
+   "ref": {
+    "value": 185,
+    "tol": 0.05,
+    "kind": "rel",
+    "note": "0.37 mm diameter"
+   },
+   "status": "ok",
+   "deviation": -0.010472212736866871
+  },
+  "w_mirror_um": {
+   "value": 2679.7626653747907,
+   "unit": "um",
+   "label": "linear mode on mirror (1/e2 radius)",
+   "ref": {
+    "value": 2700,
+    "tol": 0.05,
+    "kind": "rel",
+    "note": "5.4 mm diameter"
+   },
+   "status": "ok",
+   "deviation": -0.007495309120447894
+  },
+  "w0_injected_um": {
+   "value": 183.06264064367963,
+   "unit": "um",
+   "label": "injected waist (linear)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "P_over_Pc": {
+   "value": 0.30816879709743467,
+   "unit": "",
+   "label": "input peak power / critical power",
+   "ref": {
+    "value": 0.5,
+    "tol": null,
+    "kind": "info",
+    "note": ""
+   },
+   "status": "info",
+   "deviation": -0.38366240580513067
+  },
+  "B_estimate_rad": {
+   "value": 100.18243089586451,
+   "unit": "rad",
+   "label": "B-integral, matched-mode estimate",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "transmission": {
+   "value": 0.9554948630686899,
+   "unit": "",
+   "label": "cell transmission",
+   "ref": {
+    "value": 0.957,
+    "tol": 0.02,
+    "kind": "abs",
+    "note": ""
+   },
+   "status": "ok",
+   "deviation": -0.0015727658634378757
+  },
+  "B_rad": {
+   "value": 100.77216561513309,
+   "unit": "rad",
+   "label": "B-integral, on-axis peak",
+   "ref": {
+    "value": 55,
+    "tol": null,
+    "kind": "info",
+    "note": "55 (fit), 59 +- 6"
+   },
+   "status": "info",
+   "deviation": 0.8322211930024198
+  },
+  "I_peak_max_Wcm2": {
+   "value": 25610754265081.45,
+   "unit": "W/cm2",
+   "label": "max peak intensity at the cell centre",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "F_mirror_max_Jcm2": {
+   "value": 0.13684504166666459,
+   "unit": "J/cm2",
+   "label": "max fluence on the mirrors",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "edge_fraction": {
+   "value": 3.593497467591078e-06,
+   "unit": "",
+   "label": "max fluence fraction outside 70 % of the box (should be ~0)",
+   "ref": {
+    "value": 0.001,
+    "tol": null,
+    "kind": "max",
+    "note": "numerical check"
+   },
+   "status": "ok",
+   "deviation": -0.9964065025324089
+  },
+  "eta00_final": {
+   "value": 0.9993304474493492,
+   "unit": "",
+   "label": "HG00 fraction, output",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "M2x": {
+   "value": 1.0014184978307694,
+   "unit": "",
+   "label": "M2 x (spectrally weighted)",
+   "ref": {
+    "value": 1.17,
+    "tol": null,
+    "kind": "max",
+    "note": ""
+   },
+   "status": "ok",
+   "deviation": -0.14408675399079532
+  },
+  "M2y": {
+   "value": 1.0014184904559063,
+   "unit": "",
+   "label": "M2 y (spectrally weighted)",
+   "ref": {
+    "value": 1.18,
+    "tol": null,
+    "kind": "max",
+    "note": ""
+   },
+   "status": "ok",
+   "deviation": -0.15134026232550313
+  },
+  "w_breathing": {
+   "value": 0.29345084527398646,
+   "unit": "",
+   "label": "beam-size oscillation (max-min)/w_in",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "span20_nm": {
+   "value": 69.4611722170431,
+   "unit": "nm",
+   "label": "-20 dB spectral width",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "rms_width_nm": {
+   "value": 21.08745281062986,
+   "unit": "nm",
+   "label": "RMS spectral width",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "lambda_centroid_nm": {
+   "value": 1029.1337964511379,
+   "unit": "nm",
+   "label": "spectral centre of mass",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "ftl_fs": {
+   "value": 42.716671003949834,
+   "unit": "fs",
+   "label": "Fourier limit (integrated spectrum)",
+   "ref": {
+    "value": 39,
+    "tol": 0.1,
+    "kind": "rel",
+    "note": ""
+   },
+   "status": "ok",
+   "deviation": 0.0952992565115342
+  },
+  "comp_fs": {
+   "value": 43.6610617654687,
+   "unit": "fs",
+   "label": "compressed with the paper's -9400 fs2",
+   "ref": {
+    "value": 41,
+    "tol": 0.15,
+    "kind": "rel",
+    "note": "model 41.6"
+   },
+   "status": "ok",
+   "deviation": 0.06490394549923663
+  },
+  "comp_peak_ratio": {
+   "value": 0.5452940647187589,
+   "unit": "",
+   "label": "peak power / Fourier limit (paper GDD)",
+   "ref": {
+    "value": 0.62,
+    "tol": 0.1,
+    "kind": "abs",
+    "note": "model 0.67"
+   },
+   "status": "ok",
+   "deviation": -0.12049344400200185
+  },
+  "best_gdd_fs2": {
+   "value": -8484.038644459746,
+   "unit": "fs2",
+   "label": "GDD maximising the peak power",
+   "ref": {
+    "value": -9400,
+    "tol": 0.15,
+    "kind": "rel",
+    "note": ""
+   },
+   "status": "ok",
+   "deviation": 0.09744269739789935
+  },
+  "best_comp_fs": {
+   "value": 45.26127326297278,
+   "unit": "fs",
+   "label": "compressed with the best GDD",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "best_peak_ratio": {
+   "value": 0.6981120483188533,
+   "unit": "",
+   "label": "peak power / Fourier limit (best GDD)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "best_peak_power_GW": {
+   "value": 136.89110348216792,
+   "unit": "GW",
+   "label": "compressed peak power (best GDD)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "V_weighted_x": {
+   "value": 0.9999401591394865,
+   "unit": "",
+   "label": "homogeneity, intensity weighted in 1/e2 (x)",
+   "ref": {
+    "value": 0.967,
+    "tol": null,
+    "kind": "min",
+    "note": "measured; the ideal cell can only do better"
+   },
+   "status": "ok",
+   "deviation": 0.03406428039243698
+  },
+  "V_min_fwhm": {
+   "value": 0.9999099083888252,
+   "unit": "",
+   "label": "min homogeneity within FWHM",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "V_min_e2": {
+   "value": 0.9996510033854273,
+   "unit": "",
+   "label": "min homogeneity within 1/e2",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "similarity_spm_model": {
+   "value": 0.6411264083723548,
+   "unit": "",
+   "label": "spectral similarity with the paper's SPM model (phi = 55)",
+   "ref": {
+    "value": 1.0,
+    "tol": 0.05,
+    "kind": "abs",
+    "note": ""
+   },
+   "status": "off",
+   "deviation": -0.3588735916276452
+  }
+ }
+}

@@ -35,7 +35,7 @@ class Kaumanns2018(Benchmark):
     paper = {"citation": "M. Kaumanns et al., Opt. Lett. 43, 5877 (2018)", "doi": "10.1364/OL.43.005877"}
     params = dict(
         lambda0=1030e-9,
-        energy=18.6e-3,          # paper
+        energy=12.6e-3,          # paper
         fwhm=1.3e-12,            # paper (Fourier-limited input)
         gas="Ar",
         pressure_bar=0.6,        # paper
@@ -65,6 +65,7 @@ class Kaumanns2018(Benchmark):
         "similarity_spm_model": Ref(1.0, 0.05, kind="abs"),
     }
     measured = {"spectrum": "data/kaumanns2018_spectrum.csv"}   # optional, digitised Fig. 2 (nm, I)
+    calibrated = {"energy": {"paper": 18.6e-3, "note": "effective energy: ASE / pre- and post-pulses (see paper)"}}
     presets = [dict(box_factor=8, points_per_waist=8, time_window_factor=6),
                dict(box_factor=7, points_per_waist=7, time_window_factor=5),
                dict(box_factor=6, points_per_waist=6, time_window_factor=4.5)]

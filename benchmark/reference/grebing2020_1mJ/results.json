@@ -40,7 +40,8 @@
    "points_per_waist": 8,
    "time_window_factor": 8
   },
-  "record_every": 1
+  "record_every": 1,
+  "promoted": "2026-11-03T09:09:40"
  },
  "params": {
   "lambda0": 1.03e-06,
