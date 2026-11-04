@@ -44,17 +44,17 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
-# the notebooks and benchmark/ are being reworked on another branch: lint them once it is merged
-extend-exclude = ["*.ipynb", "benchmark"]
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 extend-select = ["E501", "W"]   # no formatter: keep line length and whitespace in check
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]   # re-exports
+"benchmark/*.py" = ["RUF012"]   # benchmarks are declared as class attributes (params, reference, ...), never mutated
 
 [tool.ruff.lint.isort]
-known-local-folder = ["helpers"]   # tests/helpers.py
+known-local-folder = ["helpers", "framework", "analyze"]   # tests/helpers.py, benchmark/
 combine-as-imports = true
 
 [tool.ty.src]

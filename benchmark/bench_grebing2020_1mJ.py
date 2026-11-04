@@ -25,7 +25,9 @@ Usage: python bench_grebing2020_1mJ.py [--quick] [--device gpu] [--set n2_1bar=1
        (python bench_grebing2020_1mJ.py -h for all options)
 """
 import numpy as np
+
 import thunder4d as th
+
 from framework import Benchmark, Ref, band_mirror, metric, spectral_phase
 
 
@@ -34,23 +36,23 @@ class Grebing2020(Benchmark):
     title = "1 mJ, 200 fs, Ar 700 mbar, 26 passes (Grebing et al., Opt. Lett. 45, 6250, 2020)"
     paper = {"citation": "C. Grebing et al., Opt. Lett. 45, 6250 (2020)",
              "doi": "10.1364/OL.408998", "url": "https://arxiv.org/abs/2103.00893"}
-    params = dict(
-        lambda0=1030e-9,
-        energy=994e-6,           # Müller 2021, their simulation of this stage (Grebing 2020: ~1 mJ)
-        fwhm=200e-15,            # paper
-        tod_fs3=-1e4,            # Müller 2021: reproduces the slight spectral asymmetry
-        gas="Ar",
-        pressure_bar=0.7,        # paper
-        n2_1bar=1.0e-23,         # paper
-        R=0.6, N=26, k=1,        # paper: RoC 0.6 m, d = 1183 mm, 26 passes, re-entrant
-        n_passes=26,
-        mirror_R=0.9995,         # paper: R > 99.95 % over 970-1130 nm
-        band=(960e-9, 1140e-9),  # assumption: 50 % edges 10 nm outside the specified band
-        mirror_gdd=35.0,         # within the paper's specs (|GDD| < 50 fs^2)
-        compressor_gdd=-1923.0,  # paper
-        lambda_min=920e-9, lambda_max=1160e-9,
-        injection="linear",      # "linear" (paper) or "nonlinear" (Kerr-matched waist)
-    )
+    params = {
+        "lambda0": 1030e-9,
+        "energy": 994e-6,           # Müller 2021, their simulation of this stage (Grebing 2020: ~1 mJ)
+        "fwhm": 200e-15,            # paper
+        "tod_fs3": -1e4,            # Müller 2021: reproduces the slight spectral asymmetry
+        "gas": "Ar",
+        "pressure_bar": 0.7,        # paper
+        "n2_1bar": 1.0e-23,         # paper
+        "R": 0.6, "N": 26, "k": 1,  # paper: RoC 0.6 m, d = 1183 mm, 26 passes, re-entrant
+        "n_passes": 26,
+        "mirror_R": 0.9995,         # paper: R > 99.95 % over 970-1130 nm
+        "band": (960e-9, 1140e-9),  # assumption: 50 % edges 10 nm outside the specified band
+        "mirror_gdd": 35.0,         # within the paper's specs (|GDD| < 50 fs^2)
+        "compressor_gdd": -1923.0,  # paper
+        "lambda_min": 920e-9, "lambda_max": 1160e-9,
+        "injection": "linear",      # "linear" (paper) or "nonlinear" (Kerr-matched waist)
+    }
     reference = {
         "w0_um": Ref(150, 0.05, note="0.30 mm diameter"),
         "w_mirror_um": Ref(1250, 0.05, note="2.5 mm diameter"),
@@ -64,9 +66,9 @@ class Grebing2020(Benchmark):
         "B_rad": Ref(13, kind="info", note="~13 beam-averaged"),
     }
     measured = {"spectrum": "data/grebing2020_spectrum.csv"}    # optional, digitised Fig. 2 (nm, I)
-    presets = [dict(box_factor=8, points_per_waist=8, time_window_factor=8),
-               dict(box_factor=7, points_per_waist=7, time_window_factor=7),
-               dict(box_factor=6, points_per_waist=6, time_window_factor=6)]
+    presets = [{"box_factor": 8, "points_per_waist": 8, "time_window_factor": 8},
+               {"box_factor": 7, "points_per_waist": 7, "time_window_factor": 7},
+               {"box_factor": 6, "points_per_waist": 6, "time_window_factor": 6}]
 
     def make_cell(self, P, n_passes):
         gas = th.Material(P["gas"], P["pressure_bar"], n2_1bar=P["n2_1bar"])

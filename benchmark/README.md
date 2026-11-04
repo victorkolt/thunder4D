@@ -14,7 +14,7 @@ stored and analysed the same way.
 
 ```bash
 cd benchmark
-python bench_grebing2020_1mJ.py --quick          # 2 passes, coarse grid: checks that it runs (not physics)
+python bench_grebing2020_1mJ.py --quick          # 2 passes, coarse grid: checks that it runs (no paper check)
 python bench_grebing2020_1mJ.py                  # full run, finest grid preset that fits in memory
 python bench_grebing2020_1mJ.py -h               # all options
 ```
@@ -139,6 +139,28 @@ the current scripts, so changing a tolerance does not need a new run. The report
 table of all benchmarks, a figure of the deviation of every checked metric from the paper with its
 tolerance, and one section per benchmark (run details, calibrated parameters, standard figure, every
 metric with a reference). Commit `reference/` after running both commands.
+
+## Tests
+
+`tests/test_benchmarks.py` (run by `pytest` in CI) reruns the quick case of every benchmark on the CPU,
+a few seconds each, and checks that:
+
+- the run finishes, with finite outputs, no energy gain, the field inside the box and M² ≥ 1;
+- the main physical outputs (transmission, B-integral, spectral widths, Fourier limit, M², homogeneity,
+  ...) are within 0.1 % of the snapshots in `reference/quick/`;
+- the framework helpers, `--promote` and `--report` work, and every committed reference run has its
+  `curves.npz`.
+
+Quick runs are not compared with the papers (all their metrics are `info`): the snapshots only detect
+that a change of the code changed the results. When a change is intended (new physics, better
+numerics), update the snapshots and say so in the commit message:
+
+```bash
+python analyze.py --update-quick            # all benchmarks, or give their names
+```
+
+A new benchmark needs its snapshot too (`python analyze.py --update-quick <name>`), otherwise the
+tests fail.
 
 ## Adding a benchmark
 

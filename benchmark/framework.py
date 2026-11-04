@@ -35,7 +35,7 @@ import os
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 import numpy as np
 
@@ -220,7 +220,11 @@ def rms_width(lam, S):
     return lc * 1e9, float(np.sqrt(np.sum((lam - lc) ** 2 * S) / np.sum(S)) * 1e9)
 
 
-def homogeneity_1d(S, rel=np.exp(-2)):
+EXP_M2 = np.exp(-2)
+NUMERICAL_CHECKS = ("edge_fraction",)       # checks of the numerics, not comparisons with a paper
+
+
+def homogeneity_1d(S, rel=EXP_M2):
     """Spectral homogeneity of Weitenberg et al. (Opt. Express 25, 20502, 2017), as in the papers:
     V(x) = (int sqrt(S S_ref))^2 / (int S int S_ref), S_ref = spectrum at the intensity maximum,
     S[x, lambda]. Returns V(x) and its intensity-weighted mean inside the 1/e^2 width."""
@@ -257,7 +261,7 @@ def _git_commit():
     try:
         return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=HERE,
                                        stderr=subprocess.DEVNULL, text=True).strip()
-    except Exception:
+    except (OSError, subprocess.CalledProcessError):     # no git, or not a repository
         return None
 
 
@@ -300,10 +304,10 @@ class Benchmark:
     #                                   {"energy": {"paper": 290e-6, "note": "why"}}; shown in the report
 
     # grid: presets for suggest_lens_grid, finest first; the finest that fits in memory is used
-    presets = [dict(box_factor=8, points_per_waist=8, time_window_factor=8),
-               dict(box_factor=7, points_per_waist=7, time_window_factor=7),
-               dict(box_factor=6, points_per_waist=6, time_window_factor=6)]
-    quick_preset = dict(box_factor=5, points_per_waist=3, time_window_factor=4)
+    presets = [{"box_factor": 8, "points_per_waist": 8, "time_window_factor": 8},
+               {"box_factor": 7, "points_per_waist": 7, "time_window_factor": 7},
+               {"box_factor": 6, "points_per_waist": 6, "time_window_factor": 6}]
+    quick_preset = {"box_factor": 5, "points_per_waist": 3, "time_window_factor": 4}
     quick_passes = 2
     n_fields = 10                     # full-size arrays alive during a step (memory estimate)
     record_every = 1                  # full diagnostics every n passes (last pass always)
@@ -319,8 +323,8 @@ class Benchmark:
         return P["lambda0"]
 
     def grid_args(self, P):
-        return dict(lambda0=self.grid_carrier(P), lambda_min=P["lambda_min"],
-                    lambda_max=P["lambda_max"], pulse_fwhm=P.get("window_fwhm", P["fwhm"]))
+        return {"lambda0": self.grid_carrier(P), "lambda_min": P["lambda_min"],
+                "lambda_max": P["lambda_max"], "pulse_fwhm": P.get("window_fwhm", P["fwhm"])}
 
     def spectrum(self, grid, P):
         """Complex spectral amplitude E(Om). Default: gaussian at lambda0 with optional GDD/TOD
@@ -517,8 +521,8 @@ class Benchmark:
         print(f"input: {ctx.spectrum_source}, {P['energy']*1e3:.4g} mJ, peak {pulse.peak_power()/1e9:.3g} GW, "
               f"injected waist {ctx.w0_ref*1e6:.0f} um ({P.get('injection', 'linear')})")
 
-        settings = dict(phi_max=args.phi_max, gouy_step=args.gouy_step, quick=args.quick,
-                        n_passes=n_passes, preset=ctx.preset, record_every=args.record_every)
+        settings = {"phi_max": args.phi_max, "gouy_step": args.gouy_step, "quick": args.quick,
+                    "n_passes": n_passes, "preset": ctx.preset, "record_every": args.record_every}
         fp = json.dumps({"params": {k: str(v) for k, v in sorted(P.items())},
                          "settings": {k: str(v) for k, v in sorted(settings.items())}})
         run_id = f"{args.label or ('quick' if args.quick else 'run')}_{hashlib.md5(fp.encode()).hexdigest()[:8]}"
@@ -550,6 +554,10 @@ class Benchmark:
         M2, C2 = self.extra_metrics(ctx)
         M.update(M2)
         C.update(C2)
+        if args.quick:              # 2 passes on a small, coarse grid: no reference applies
+            for m in M.values():
+                if m["status"] in ("ok", "off"):
+                    m["status"] = "info"
 
         g = ctx.grid
         result = {

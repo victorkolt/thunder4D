@@ -25,7 +25,9 @@ Fourier-limited peak power (their model: 41.6 fs, 67 %), M2 1.17 x 1.18, weighte
 Not modelled: ionisation (run just below breakdown, ~18.3 mJ at 600 mbar), ASE / pre-pulses.
 """
 import numpy as np
+
 import thunder4d as th
+
 from framework import Benchmark, Ref, band_mirror, metric, spectral_similarity
 
 
@@ -33,22 +35,22 @@ class Kaumanns2018(Benchmark):
     name = "kaumanns2018_18mJ"
     title = "18 mJ, 1.3 ps, Ar 600 mbar, 45 passes (Kaumanns et al., Opt. Lett. 43, 5877, 2018)"
     paper = {"citation": "M. Kaumanns et al., Opt. Lett. 43, 5877 (2018)", "doi": "10.1364/OL.43.005877"}
-    params = dict(
-        lambda0=1030e-9,
-        energy=12.6e-3,          # paper
-        fwhm=1.3e-12,            # paper (Fourier-limited input)
-        gas="Ar",
-        pressure_bar=0.6,        # paper
-        n2_1bar=1.0e-23,         # paper: (10 +- 1) x 1e-24 m^2/W at 1 bar
-        R=1.5, d=2.986,          # paper: RoC 1.5 m, d ~ 1.99 R; 2.986 m gives the quoted eigenmode
-        n_passes=45,             # paper
-        mirror_R=0.999,          # paper: R > 99.9 % over 965-1100 nm
-        band=(955e-9, 1110e-9),  # assumption
-        compressor_gdd=-9400.0,  # paper
-        phi_fit=55.0,            # paper: phase of the SPM model fitted to the measured spectrum
-        lambda_min=930e-9, lambda_max=1140e-9,   # grid window, wider than the mirror band
-        injection="linear",
-    )
+    params = {
+        "lambda0": 1030e-9,
+        "energy": 12.6e-3,                            # paper
+        "fwhm": 1.3e-12,                              # paper (Fourier-limited input)
+        "gas": "Ar",
+        "pressure_bar": 0.6,                          # paper
+        "n2_1bar": 1.0e-23,                           # paper: (10 +- 1) x 1e-24 m^2/W at 1 bar
+        "R": 1.5, "d": 2.986,                         # paper: RoC 1.5 m, d ~ 1.99 R; 2.986 m gives the quoted eigenmode
+        "n_passes": 45,                               # paper
+        "mirror_R": 0.999,                            # paper: R > 99.9 % over 965-1100 nm
+        "band": (955e-9, 1110e-9),                    # assumption
+        "compressor_gdd": -9400.0,                    # paper
+        "phi_fit": 55.0,                              # paper: phase of the SPM model fitted to the measured spectrum
+        "lambda_min": 930e-9, "lambda_max": 1140e-9,  # grid window, wider than the mirror band
+        "injection": "linear",
+    }
     reference = {
         "w0_um": Ref(185, 0.05, note="0.37 mm diameter"),
         "w_mirror_um": Ref(2700, 0.05, note="5.4 mm diameter"),
@@ -66,10 +68,10 @@ class Kaumanns2018(Benchmark):
     }
     measured = {"spectrum": "data/kaumanns2018_spectrum.csv"}   # optional, digitised Fig. 2 (nm, I)
     calibrated = {"energy": {"paper": 18.6e-3, "note": "effective energy: ASE / pre- and post-pulses (see paper)"}}
-    presets = [dict(box_factor=8, points_per_waist=8, time_window_factor=6),
-               dict(box_factor=7, points_per_waist=7, time_window_factor=5),
-               dict(box_factor=6, points_per_waist=6, time_window_factor=4.5)]
-    quick_preset = dict(box_factor=5, points_per_waist=3, time_window_factor=3.5)
+    presets = [{"box_factor": 8, "points_per_waist": 8, "time_window_factor": 6},
+               {"box_factor": 7, "points_per_waist": 7, "time_window_factor": 5},
+               {"box_factor": 6, "points_per_waist": 6, "time_window_factor": 4.5}]
+    quick_preset = {"box_factor": 5, "points_per_waist": 3, "time_window_factor": 3.5}
     record_every = 5             # 45 passes: full diagnostics every 5 passes (and the last)
     gdd_bounds = (-20000, 0)
 
@@ -91,7 +93,8 @@ class Kaumanns2018(Benchmark):
         S_m /= S_m.max()
         lam, S = dg.total_spectrum(grid, ctx.sim.Aw)
         M = {"similarity_spm_model": metric(spectral_similarity(lam * 1e9, S / S.max(), lam_m * 1e9, S_m), "",
-                                            f"spectral similarity with the paper's SPM model (phi = {P['phi_fit']:.0f})",
+                                            f"spectral similarity with the paper's SPM model "
+                                            f"(phi = {P['phi_fit']:.0f})",
                                             self.reference["similarity_spm_model"])}
         C = {"S_ref_lam_nm": lam_m * 1e9, "S_ref": S_m,
              "S_ref_label": np.array(f"SPM model, phi = {P['phi_fit']:.0f} rad (paper)")}

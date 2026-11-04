@@ -35,9 +35,20 @@ GDD oscillations, the spectral response of the silver mirrors.
 Usage: python bench_rueda2021_8fs.py [--quick] [--device cpu] [--set energy=290e-6] ...
 """
 import numpy as np
+
 import thunder4d as th
-from framework import (Benchmark, Ref, metric, spectral_phase, beam_pixels, integrated_power,
-                       fourier_limit, best_phase, fwhm)
+
+from framework import (
+    Benchmark,
+    Ref,
+    beam_pixels,
+    best_phase,
+    fourier_limit,
+    fwhm,
+    integrated_power,
+    metric,
+    spectral_phase,
+)
 
 
 def n_fused_silica(lam_um):
@@ -47,13 +58,16 @@ def n_fused_silica(lam_um):
                    + 0.8974794 * l2 / (l2 - 9.896161 ** 2))
 
 
+EXP_M2 = np.exp(-2)
+
+
 def width_at(lam, S, level):
     """Full width of S(lam) at `level` x max, outermost crossings [same unit as lam]."""
     above = np.nonzero(S >= level * S.max())[0]
     return lam[above[-1]] - lam[above[0]]
 
 
-def half_width_at(x, p, level=np.exp(-2)):
+def half_width_at(x, p, level=EXP_M2):
     """Half width of a 1D profile at `level` x max, outermost crossings."""
     above = np.nonzero(p >= level * p.max())[0]
     return 0.5 * (x[above[-1]] - x[above[0]])
@@ -64,22 +78,22 @@ class Rueda2021(Benchmark):
     title = "0.29 mJ, 42 fs -> 8 fs, Ar 1500 mbar, 11 passes (Rueda et al., Opt. Express 29, 27004, 2021)"
     paper = {"citation": "P. Rueda et al., Opt. Express 29, 27004 (2021)", "doi": "10.1364/OE.435086",
              "url": "https://doi.org/10.1364/OE.435086"}
-    params = dict(
-        lambda0=790e-9,          # paper
-        energy=145e-6,           # 0.5 x 290 uJ, as in the authors' simulation (nominal: 290e-6)
-        fwhm=42e-15,             # paper (nearly Fourier-limited)
-        gas="Ar",
-        pressure_bar=1.5,        # paper
-        n2_1bar=1.0e-23,         # table value; the paper uses Wahlstrand et al., PRL 109, 113904 (2012)
-        R=0.3, d=0.584,          # paper
-        n_passes=11,             # paper: 11 passes through the focal plane
-        mirror_R=0.97,           # paper (simulation): protected silver, flat
-        cm_gdd=-480.0,           # assumption: 12 bounces of PC-70 at ~-40 fs^2 each
-        fs_scan_mm=(-2.0, 10.0), # fused silica scanned in the compressor (includes the 0.5 mm window)
-        lambda_min=450e-9, lambda_max=1300e-9,
-        window_fwhm=100e-15,     # sets the time window (x time_window_factor): the output is chirped
-        injection="linear",      # paper: matched to the cavity eigenmode
-    )
+    params = {
+        "lambda0": 790e-9,           # paper
+        "energy": 145e-6,            # 0.5 x 290 uJ, as in the authors' simulation (nominal: 290e-6)
+        "fwhm": 42e-15,              # paper (nearly Fourier-limited)
+        "gas": "Ar",
+        "pressure_bar": 1.5,         # paper
+        "n2_1bar": 1.0e-23,          # table value; the paper uses Wahlstrand et al., PRL 109, 113904 (2012)
+        "R": 0.3, "d": 0.584,        # paper
+        "n_passes": 11,              # paper: 11 passes through the focal plane
+        "mirror_R": 0.97,            # paper (simulation): protected silver, flat
+        "cm_gdd": -480.0,            # assumption: 12 bounces of PC-70 at ~-40 fs^2 each
+        "fs_scan_mm": (-2.0, 10.0),  # fused silica scanned in the compressor (includes the 0.5 mm window)
+        "lambda_min": 450e-9, "lambda_max": 1300e-9,
+        "window_fwhm": 100e-15,      # sets the time window (x time_window_factor): the output is chirped
+        "injection": "linear",       # paper: matched to the cavity eigenmode
+    }
     reference = {
         "ftl_fs": Ref(6.2, 0.10, note="FTL of the measured spectrum (Fig. 3a); text: 5.0 fs"),
         "comp_fs": Ref(8.06, kind="info", note="SPIDER, limited by residual TOD"),
@@ -92,11 +106,11 @@ class Rueda2021(Benchmark):
                 "pulse": "data/rueda2021_pulse.csv"}            # Fig. 3b, digitised (fs, P)
     calibrated = {"energy": {"paper": 290e-6, "note": "x 0.5, as in the authors' own simulation "
                                                       "(pedestals, wavefront aberrations)"}}
-    presets = [dict(box_factor=8, points_per_waist=8, time_window_factor=8),
-               dict(box_factor=7, points_per_waist=7, time_window_factor=7),
-               dict(box_factor=6, points_per_waist=6, time_window_factor=6),
-               dict(box_factor=5, points_per_waist=5, time_window_factor=5)]
-    quick_preset = dict(box_factor=5, points_per_waist=3, time_window_factor=4)
+    presets = [{"box_factor": 8, "points_per_waist": 8, "time_window_factor": 8},
+               {"box_factor": 7, "points_per_waist": 7, "time_window_factor": 7},
+               {"box_factor": 6, "points_per_waist": 6, "time_window_factor": 6},
+               {"box_factor": 5, "points_per_waist": 5, "time_window_factor": 5}]
+    quick_preset = {"box_factor": 5, "points_per_waist": 3, "time_window_factor": 4}
     compression_up = 8
     gdd_bounds = (-1500, 500)
 
