@@ -1,12 +1,15 @@
 Overview of the code
 ====================
 
-This page describes what thunder4d computes and how. The conventions used throughout
-the code (Fourier signs, array ordering, units) are in :doc:`conventions`.
+This page describes what thunder4d computes and how. The recommended solver propagates the field
+in a frame that follows the beam inside the cell: it is described in :doc:`lens_frame`. The
+conventions used throughout the code (Fourier signs, array ordering, units) are in
+:doc:`conventions`.
 
 .. toctree::
    :maxdepth: 1
 
+   lens_frame
    conventions
 
 Representation of the field
@@ -47,8 +50,41 @@ with
 - **Spectral window.** The nonlinear source is tapered to zero at the edges of the
   spectral window to avoid aliasing.
 
-Numerical scheme
-----------------
+Two solvers
+-----------
+
+thunder4d has two propagators with the same interface (same pulses, diagnostics, history and
+saved files):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 39 39
+
+   * -
+     - **lens frame** (recommended)
+     - standard
+   * - classes
+     - :func:`~thunder4d.lensframe.suggest_lens_grid`,
+       :class:`~thunder4d.lensframe.LensFrameSimulation`
+     - :func:`~thunder4d.grid.suggest_grid`, :class:`~thunder4d.simulation.MPCSimulation`
+   * - grid
+     - follows the eigenmode: box of a few **waists**, independent of :math:`d`
+     - fixed: box of a few **mirror spots**, :math:`dx` limited by the mirror curvature
+   * - mirror
+     - identity (spectral response and aperture only)
+     - curvature phase applied on the grid
+   * - diffraction
+     - paraxial, exact in that approximation
+     - non-paraxial
+   * - best for
+     - every cell, and by far near-concentric (high-energy) cells
+     - cross-checks, non-paraxial questions
+
+The equation and the scheme of the lens frame are in :doc:`lens_frame`. The rest of this page
+describes the standard solver, whose equation is the physical starting point of both.
+
+Numerical scheme (standard solver)
+----------------------------------
 
 The solver keeps the field in the mixed domain :math:`(x, y, \Omega)`:
 
@@ -97,7 +133,9 @@ Each bounce multiplies the field in :math:`(x, y, \Omega)` by
    \mathcal{A}(r),
 
 i.e. an achromatic curved mirror (focal length :math:`R/2`), its spectral response,
-and an optional soft clear aperture :math:`\mathcal{A}(r)`.
+and an optional soft clear aperture :math:`\mathcal{A}(r)`. In the lens frame the curvature
+factor cancels exactly and only the spectral response and the aperture remain
+(:doc:`lens_frame`).
 
 Linear eigenmode
 ~~~~~~~~~~~~~~~~

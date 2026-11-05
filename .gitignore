@@ -6,5 +6,8 @@ docs/_build/
 *.pkl
 *.npz
 *.npy
+!benchmark/reference/**/curves.npz
 out_*/
 *.egg-info/
+benchmark/results/
+docs/source/benchmarks/

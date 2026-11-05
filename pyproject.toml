@@ -6,7 +6,7 @@ build-backend = "uv_build"
 name = "thunder4d"
 license = "MIT"
 license-files = ["LICENSE"]
-version = "1.0.0"
+version = "1.1.0"
 description = "thunder4d: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,6 +22,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "matplotlib>=3.10.9",
     "numpy>=2.0",
     "scipy>=1.10",
 ]
@@ -43,17 +44,17 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 120
-# the notebooks and benchmark/ are being reworked on another branch: lint them once it is merged
-extend-exclude = ["*.ipynb", "benchmark"]
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 extend-select = ["E501", "W"]   # no formatter: keep line length and whitespace in check
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]   # re-exports
+"benchmark/*.py" = ["RUF012"]   # benchmarks are declared as class attributes (params, reference, ...), never mutated
 
 [tool.ruff.lint.isort]
-known-local-folder = ["helpers"]   # tests/helpers.py
+known-local-folder = ["helpers", "framework", "analyze"]   # tests/helpers.py, benchmark/
 combine-as-imports = true
 
 [tool.ty.src]

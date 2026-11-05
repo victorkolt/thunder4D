@@ -16,7 +16,9 @@ Unlike 1D or radially symmetric codes, thunder4d resolves the full transverse fi
 
 Main features:
 
-- non-paraxial linear propagation with the full dispersion of the gas,
+- a **lens-frame** solver whose grid follows the beam inside the cell: the box only has to
+  hold the waist, so near-concentric, high-energy cells cost no more than any other,
+- linear propagation with the full dispersion of the gas (non-paraxial standard solver also available),
 - Kerr nonlinearity with self-steepening,
 - adaptive split-step scheme driven by the nonlinear phase per step,
 - linear and **nonlinear (Kerr-lens) mode matching** of the cell,
@@ -38,8 +40,8 @@ Contents of the documentation
 -----------------------------
 
 If you are new to THUNDER4D, read :doc:`overview/overview` first, then
-:doc:`install/installation` and :doc:`how_to_run`. The :doc:`api_reference/api_reference`
-lists every object of the package.
+:doc:`install/installation` and :doc:`how_to_run`. :doc:`benchmarks/index` compares the code with
+published experiments. The :doc:`api_reference/api_reference` lists every object of the package.
 
 .. toctree::
    :maxdepth: 2
@@ -48,6 +50,7 @@ lists every object of the package.
    install/installation
    how_to_run
    examples/examples
+   benchmarks/index
    api_reference/api_reference
    advanced/advanced
 

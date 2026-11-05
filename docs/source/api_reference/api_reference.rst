@@ -14,6 +14,7 @@ Everything useful is available at package level:
    m.measured_profile, m.gaussian_spectrum, m.measured_spectrum,
    m.spectrum_from_temporal_field, m.add_spectral_phase, m.zernike_wavefront
    m.MPC, m.UPPESolver, m.MPCSimulation
+   m.LensFrameSimulation, m.LensFrameSolver, m.suggest_lens_grid, m.imaged_near_field_lens, m.lens_frame_scale
 
 .. list-table::
    :header-rows: 1
@@ -33,6 +34,8 @@ Everything useful is available at package level:
      - UPPE propagator
    * - :doc:`simulation`
      - pass loop, recording, checkpoints, saving
+   * - :doc:`lensframe`
+     - beam-following (lens-frame) solver, grid and injection (recommended)
    * - :doc:`diagnostics`
      - spectrograms, profiles, modal content, homogeneity, M², compression
 
@@ -45,4 +48,5 @@ Everything useful is available at package level:
    cell
    solver
    simulation
+   lensframe
    diagnostics
