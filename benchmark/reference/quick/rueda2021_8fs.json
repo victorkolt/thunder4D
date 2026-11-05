@@ -1,8 +1,8 @@
 {
  "benchmark": "rueda2021_8fs",
  "thunder4d": "1.0.0",
- "git": "d152a47",
- "date": "2026-11-04T12:30:49",
+ "git": "ae152b3",
+ "date": "2026-11-05T11:09:57",
  "grid_shape": [
   27,
   27,

@@ -101,20 +101,21 @@ Benchmarks against experiments
    * - ``bench_kaumanns2018_18mJ.py``
      - Kaumanns *et al.*, Opt. Lett. **43**, 5877 (2018)
      - 18 mJ, 1.3 ps, Ar
-   * - ``bench_daniault2024_4fs.py``
-     - Daniault *et al.*, Opt. Lett. (2024)
-     - 6.7 mJ, 35 fs → 4 fs, He
+   * - ``bench_rueda2021_8fs.py``
+     - Rueda *et al.*, Opt. Express **29**, 27004 (2021)
+     - 0.29 mJ, 42 fs → 8 fs, Ar
 
 .. code-block:: bash
 
    cd benchmark
    python bench_grebing2020_1mJ.py --quick              # checks the script (2 passes, coarse grid)
-   python bench_grebing2020_1mJ.py --device gpu         # full run
-   python bench_daniault2024_4fs.py --set pressure_bar=2.2 --label p2.2
+   python bench_grebing2020_1mJ.py --device cpu         # full run (about a minute)
+   python bench_rueda2021_8fs.py --set energy=290e-6 --label nominal
    python analyze.py --latest --plot                    # tables against the papers + figures
 
 Each run writes ``results/<benchmark>/<run_id>/results.json`` (metadata, parameters and about 30
 standard metrics, each with the published value, a tolerance and a status) and ``curves.npz``
 (standard curves). ``analyze.py`` compares runs (``--compare``), plots parameter sweeps
-(``--sweep``) and exports CSV. ``benchmark/README.md`` documents the options, the output format
-and how to add a new benchmark.
+(``--sweep``), exports CSV, and builds the report of the reference runs (``--report``). The results
+of the reference runs are in :doc:`../benchmarks/index`; ``benchmark/README.md`` documents the
+options, the output format and how to add a new benchmark.

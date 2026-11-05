@@ -10,3 +10,4 @@ docs/_build/
 out_*/
 *.egg-info/
 benchmark/results/
+docs/source/benchmarks/

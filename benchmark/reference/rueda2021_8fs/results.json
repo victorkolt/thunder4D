@@ -10,9 +10,9 @@
  "run": {
   "id": "run_38b076de",
   "label": null,
-  "date": "2026-11-01T17:34:22",
-  "thunder4d": "0.10.0",
-  "git": "3380a8d",
+  "date": "2026-11-05T11:05:43",
+  "thunder4d": "1.0.0",
+  "git": "ae152b3",
   "python": "3.13.6",
   "device": "cpu",
   "fft": "scipy",
@@ -28,7 +28,7 @@
   "mirror_scale": 6.1237243569579425,
   "finished": true,
   "passes_done": 11,
-  "wall_s": 365.420777797699,
+  "wall_s": 357.2583792209625,
   "nsteps": 1292,
   "command": ".\\bench_rueda2021_8fs.py",
   "phi_max": 0.02,
@@ -41,7 +41,7 @@
    "time_window_factor": 8
   },
   "record_every": 1,
-  "promoted": "2026-11-03T09:09:40"
+  "promoted": "2026-11-05T11:09:10"
  },
  "params": {
   "lambda0": 7.9e-07,
@@ -65,6 +65,12 @@
   "injection": "linear"
  },
  "overrides": {},
+ "calibrated": {
+  "energy": {
+   "paper": 0.00029,
+   "note": "x 0.5, as in the authors' own simulation (pedestals, wavefront aberrations)"
+  }
+ },
  "metrics": {
   "w0_um": {
    "value": 110.223199165149,
@@ -217,18 +223,42 @@
    "status": "info",
    "deviation": null
   },
+  "similarity_measured": {
+   "value": 0.9512619061076104,
+   "unit": "",
+   "label": "spectral similarity with the measurement",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "ftl_measured_fs": {
+   "value": 6.178466147339393,
+   "unit": "fs",
+   "label": "Fourier limit of the measured (digitised) spectrum",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
   "ftl_fs": {
    "value": 6.284021523684361,
    "unit": "fs",
    "label": "Fourier limit (integrated spectrum)",
    "ref": {
-    "value": 5.0,
-    "tol": 0.15,
+    "value": 6.2,
+    "tol": 0.1,
     "kind": "rel",
-    "note": ""
+    "note": "FTL of the measured spectrum (Fig. 3a); text: 5.0 fs"
    },
-   "status": "off",
-   "deviation": 0.25680430473687216
+   "status": "ok",
+   "deviation": 0.01355185865876785
+  },
+  "fwhm_measured_pulse_fs": {
+   "value": 8.419075495194603,
+   "unit": "fs",
+   "label": "FWHM of the measured (digitised) pulse",
+   "ref": null,
+   "status": "info",
+   "deviation": null
   },
   "best_gdd_fs2": {
    "value": -208.7393382938326,

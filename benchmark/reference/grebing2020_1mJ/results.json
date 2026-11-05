@@ -10,9 +10,9 @@
  "run": {
   "id": "run_fc5327fc",
   "label": null,
-  "date": "2026-11-01T17:25:13",
-  "thunder4d": "0.10.0",
-  "git": "3380a8d",
+  "date": "2026-11-05T10:42:16",
+  "thunder4d": "1.0.0",
+  "git": "ae152b3",
   "python": "3.13.6",
   "device": "cpu",
   "fft": "scipy",
@@ -28,7 +28,7 @@
   "mirror_scale": 8.296229810558732,
   "finished": true,
   "passes_done": 26,
-  "wall_s": 50.99997305870056,
+  "wall_s": 49.91949915885925,
   "nsteps": 1559,
   "command": ".\\bench_grebing2020_1mJ.py",
   "phi_max": 0.02,
@@ -41,7 +41,7 @@
    "time_window_factor": 8
   },
   "record_every": 1,
-  "promoted": "2026-11-03T09:09:40"
+  "promoted": "2026-11-05T11:09:10"
  },
  "params": {
   "lambda0": 1.03e-06,
@@ -67,6 +67,7 @@
   "injection": "linear"
  },
  "overrides": {},
+ "calibrated": {},
  "metrics": {
   "w0_um": {
    "value": 153.40901552594843,
@@ -316,9 +317,9 @@
    "label": "homogeneity, intensity weighted in 1/e2 (x)",
    "ref": {
     "value": 0.987,
-    "tol": 0.015,
-    "kind": "abs",
-    "note": ""
+    "tol": null,
+    "kind": "min",
+    "note": "measured; the ideal cell can only do better"
    },
    "status": "ok",
    "deviation": 0.013035611805376405

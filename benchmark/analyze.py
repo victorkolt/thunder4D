@@ -243,6 +243,7 @@ def bench_classes():
         spec.loader.exec_module(mod)
         for v in vars(mod).values():
             if isinstance(v, type) and issubclass(v, Benchmark) and v is not Benchmark:
+                v.script, v.script_doc = os.path.basename(fn), mod.__doc__ or ""   # used by the docs
                 out[v.name] = v
     return out
 
@@ -433,7 +434,7 @@ def write_report(runs, out_dir=REF_ROOT):
                      f"{m['label']}{' (' + ref['note'] + ')' if ref.get('note') else ''} |")
         L.append("")
     path = os.path.join(out_dir, "REPORT.md")
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(L))
     print("written:", os.path.relpath(path, HERE))
 

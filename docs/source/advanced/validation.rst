@@ -44,16 +44,16 @@ Run these checks on every new configuration before interpreting results:
    the output doesn't change.
 5. **Nonlinear index.** Replace the tabulated :math:`n_2` with your own values.
 6. **Solver cross-check.** For a new regime, run a few passes with both solvers
-   (``benchmark/lens_frame_check.py`` is a template): B, energy, HG₀₀ fraction and spectrum
-   should agree to a fraction of a percent.
+   (:class:`~thunder4d.lensframe.LensFrameSimulation` and :class:`~thunder4d.simulation.MPCSimulation`):
+   B, energy, HG₀₀ fraction and spectrum should agree to a fraction of a percent.
 
 Benchmarks against experiments
 ------------------------------
 
 ``benchmark/`` contains standalone scripts that reproduce published MPC experiments with the
-lens-frame solver (Grebing *et al.* 2020, Kaumanns *et al.* 2018, Daniault *et al.* 2024) and
-store a standard set of metrics next to the published values. ``benchmark/analyze.py`` prints
-the comparison tables, compares two runs (convergence) and plots parameter sweeps. See
+lens-frame solver and store a standard set of metrics next to the published values. The results
+of the reference runs are in :doc:`../benchmarks/index`. ``benchmark/analyze.py`` prints the
+comparison tables, compares two runs (convergence) and plots parameter sweeps. See
 ``benchmark/README.md`` for the options, the output format and how to add a benchmark.
 
 .. warning::

@@ -80,6 +80,8 @@ Repository layout
    │   └── clipped_gauss_profiles.py
    ├── benchmark/             comparisons with published experiments (scripts, see benchmark/README.md)
    │   ├── framework.py       shared run / metrics / output machinery
-   │   ├── analyze.py         tables, comparisons, sweeps, figures
-   │   └── bench_*.py         one script per paper
+   │   ├── analyze.py         tables, comparisons, sweeps, figures, report
+   │   ├── bench_*.py         one script per paper
+   │   ├── data/              curves digitised from the papers
+   │   └── reference/         reference runs, report and quick-run snapshots (tests)
    └── docs/                  this documentation (Sphinx)

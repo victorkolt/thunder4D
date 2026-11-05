@@ -158,8 +158,7 @@ Validity and checks
 - The test suite (``tests/test_lensframe.py``) checks that the linear eigenmode is unchanged by one
   pass (overlap > 0.9999) and that, for a Kerr-matched 1 mJ pulse in a near-concentric argon cell,
   the B-integral, energy, HG₀₀ fraction and beam size agree with the standard solver within 0.5 %
-  and the output spectra have a similarity > 0.9999. ``benchmark/lens_frame_check.py`` runs the
-  same comparison on a finer grid, on the CPU or the GPU.
+  and the output spectra have a similarity > 0.9999.
 - The box absorber acts in the frame, i.e. on a box that is ``box_factor`` waists wide at the
   centre and ``box_factor`` × :math:`s_m` waists wide on the mirror. Check the energy column of
   the run and, in the benchmarks, ``edge_fraction``.

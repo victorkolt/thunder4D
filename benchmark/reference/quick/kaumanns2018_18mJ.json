@@ -1,8 +1,8 @@
 {
  "benchmark": "kaumanns2018_18mJ",
  "thunder4d": "1.0.0",
- "git": "d152a47",
- "date": "2026-11-04T12:30:44",
+ "git": "ae152b3",
+ "date": "2026-11-05T11:09:54",
  "grid_shape": [
   18,
   18,
