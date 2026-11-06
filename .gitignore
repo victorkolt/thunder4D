@@ -11,3 +11,4 @@ out_*/
 *.egg-info/
 benchmark/results/
 docs/source/benchmarks/
+examples/design_dummy.py
