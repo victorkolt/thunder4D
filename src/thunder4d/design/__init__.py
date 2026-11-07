@@ -18,7 +18,7 @@ from .designer import (
     evaluate,
     starting_points,
 )
-from .export import Validation4D, export, to_input, validate_4d
+from .export import Validation4D, export_input, to_input, validate_4d
 from .fast1d_quick import Fast1DQuick
 from .scan import AnalyticQuick, DesignMap, design_map
 from .specs import (
@@ -78,7 +78,7 @@ __all__ = [
     "catalog",
     "design_map",
     "evaluate",
-    "export",
+    "export_input",
     "register_laser_preset",
     "starting_points",
     "to_input",

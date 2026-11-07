@@ -168,6 +168,26 @@ Runs can be stopped and resumed:
    if sim.done:
        sim.save("run.npz")
 
+Running from an input file
+--------------------------
+
+Everything above can be written in one JSON file and run without a script: the same file is produced
+by the :doc:`design helper <design/validation_4d>` for a design, and will be read by the graphical
+interface. See :doc:`api_reference/inputfile` for the format.
+
+.. code-block:: python
+
+   import thunder4d as m
+
+   cfg = m.default_input(
+       laser={"energy_J": 0.6e-3, "duration_fs": 200.0},
+       medium={"gas": "Ar", "pressure_bar": 1.0},
+       cell={"roc_m": 0.5, "separation_m": 0.9755, "n_passes": 20},
+       grid={"lambda_min_nm": 900.0, "lambda_max_nm": 1200.0},
+   )
+   m.save_input(cfg, "cell.json")      # defaults filled in, checked
+   b = m.run_input("cell.json")        # b.sim: the finished LensFrameSimulation
+
 Output
 ------
 

@@ -176,3 +176,16 @@ def test_tolerances_are_reported():
     c = Candidate("Ar", 0.17, 2.0, 15, 1)                             # near-concentric: sensitive
     t = c.tolerances(DesignProblem())
     assert t["separation"][0] > Candidate("Ar", 0.17, 2.0, 15, 4).tolerances()["separation"][0]
+
+
+def test_refine_does_not_return_the_same_design_twice():
+    prob = DesignProblem(target=Target(objective="shortest"))
+    prob.refinement.n_candidates = 3
+    prob.refinement.neighbour_n_passes = 2
+    prob.refinement.max_evaluations = 8
+    # same geometry with 2 M and 2 M - 1 passes: one neighbourhood, one design
+    cands = [Candidate("Ar", 0.3, 2.0, 15, 4), Candidate("Ar", 0.3, 2.0, 15, 4, n_passes=29),
+             Candidate("He", 0.3, 2.0, 15, 4)]
+    res = MPCDesigner(prob, quick=toy_quick, verbose=False).refine(cands)
+    keys = [(c.gas, c.roc_m, c.round_trips, c.k, c.n_passes, round(c.pressure_bar, 3)) for c in res.refined]
+    assert len(keys) == len(set(keys)) == 2                         # Ar and He, once each

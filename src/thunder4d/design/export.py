@@ -96,7 +96,7 @@ def to_input(problem, cand, *, preset="coarse", injection="linear", name=None, w
     return cfg
 
 
-def export(problem, cand, path, **kw):
+def export_input(problem, cand, path, **kw):
     """Write one design as a standard THUNDER4D input file."""
     return save_input(to_input(problem, cand, **kw), path)
 

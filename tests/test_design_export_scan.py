@@ -84,9 +84,20 @@ def test_map_drops_invalid_rows_and_names_the_limits():
     assert "map" in m.summary()
 
 
+def test_map_needs_round_trips_unless_scanned():
+    prob = problem()
+    kw = {"gas": "Ar", "roc_m": 1.0, "k": 2, "x": ("energy_J", [1e-3, 2e-3]), "y": ("pressure_bar", [0.2, 0.4])}
+    with pytest.raises(ValueError, match="round_trips"):
+        design_map(prob, **kw)
+    m = design_map(prob, round_trips=15, **kw)
+    assert m.limiting.shape == (2, 2) and m.candidates[0, 0].round_trips == 15
+    with pytest.raises(ValueError, match="valid Herriott geometry"):
+        design_map(prob, round_trips=10, **kw)                  # k = 2 is not coprime with 10
+
+
 def test_map_with_fast1d_and_laser_axis():
     prob = problem()
-    m = design_map(prob, gas="Ar", roc_m=1.0, k=3, quick=Fast1DQuick(),
+    m = design_map(prob, gas="Ar", roc_m=1.0, k=3, round_trips=10, quick=Fast1DQuick(),
                    x=("energy_J", [1e-3, 2e-3]), y=("pressure_bar", [0.2, 0.4]))
     assert m.values["duration_fs"].shape == (2, 2)
     assert m.values["duration_fs"][0, 1] < m.values["duration_fs"][0, 0]   # more energy, shorter

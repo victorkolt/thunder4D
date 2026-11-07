@@ -9,7 +9,8 @@ Model
 * Scalar envelope A(z, t) in sqrt(W) (|A|^2 = power), frame moving at the
   group velocity of the carrier.
 * Full gas dispersion (Sellmeier), instantaneous Kerr effect with optional
-  self-steepening. No Raman, no ionisation, no pre-chirp.
+  self-steepening. No Raman, no ionisation. The input is a transform-limited pulse, or any
+  field given through MPCInput.field (the design helper uses it for a chirped input).
 * Transverse dimension reduced to a Gaussian beam followed through its
   complex q parameter: free propagation, thin Kerr lens per step (peak
   power, aberration-free Gaussian ansatz, balances diffraction at P = Pcr),
@@ -41,7 +42,7 @@ optimal compressor GDD after SPM is negative. Everything is SI.
 
 Usage
 -----
->>> from fast1d import MPCInput, simulate
+>>> from thunder4d.design.fast1d import MPCInput, simulate, validate
 >>> inp = MPCInput.herriott(roc=2.0, N=15, k=2, gas="Ar", pressure=0.13,
 ...                         energy=18e-3, fwhm=350e-15)
 >>> out = simulate(inp)

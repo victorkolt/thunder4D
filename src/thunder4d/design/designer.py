@@ -548,9 +548,9 @@ class DesignResult:
 
     def export(self, path, which=0, **kw):
         """Write a refined design (rank `which`, 0 = best) as a standard THUNDER4D input file."""
-        from .export import export
+        from .export import export_input
         cand = sorted(self.refined or self.screened, key=lambda c: c.score)[which]
-        return export(self.problem, cand, path, **kw)
+        return export_input(self.problem, cand, path, **kw)
 
     def save_json(self, path):
         data = {"problem": self.problem.to_dict(),
@@ -568,6 +568,11 @@ def _install_catalogues(gases, mirrors):
     gas_module.GASES.update(gases)
     mirror_module.MIRRORS.clear()
     mirror_module.MIRRORS.update(mirrors)
+
+
+def _visit_key(c):
+    """Identity of a configuration for the refinement: geometry, coating, mirror size and passes."""
+    return (c.gas, c.roc_m, c.round_trips, c.k, c.branch, c.coating, c.diameter_inch, c.n_passes)
 
 
 def _evaluate_task(args):
@@ -636,12 +641,22 @@ class MPCDesigner:
             print(f"evaluating {len(todo)} starting points ({self.workers} worker(s))...")
         done = iter(pmap(_evaluate_task, [(self.problem, self.quick, c) for c in todo]))
         candidates = [c if c.metrics else next(done) for c in candidates]
-        order = select_diverse(candidates, len(candidates), R.diversity)[:max_attempts]
+        order = select_diverse(candidates, len(candidates), R.diversity)
         result = DesignResult(self.problem, screened=list(candidates))
-        tried = 0
-        while len(result.refined) < R.n_candidates and tried < len(order):
+        tried, pos = 0, 0
+        explored, found = set(), set()
+        while len(result.refined) < R.n_candidates and tried < max_attempts and pos < len(order):
             need = R.n_candidates - len(result.refined)
-            batch = order[tried:tried + max(need, self.workers)]
+            batch = []
+            while pos < len(order) and len(batch) < max(need, self.workers) and tried + len(batch) < max_attempts:
+                c = order[pos]
+                pos += 1
+                if _visit_key(c) in explored:    # inside the neighbourhood of a candidate already refined
+                    continue
+                batch.append(c)
+                explored.update(_visit_key(nb) for nb in self._neighbours(c))
+            if not batch:
+                break
             outcomes = pmap(_refine_task, [(self.problem, self.quick, c) for c in batch])
             for c, (best, trace) in zip(batch, outcomes):
                 tried += 1
@@ -654,6 +669,11 @@ class MPCDesigner:
                               f"d = {c.separation_m:.3f} m: no feasible point, "
                               f"violated: {[k for k, s in best.slacks.items() if s < 0]}")
                     continue
+                step = self.problem.constraints.pressure.resolution_bar
+                design = (*_visit_key(best), round(best.pressure_bar / step))
+                if design in found:              # two starting points converged to the same design
+                    continue
+                found.add(design)
                 best.tier = "refined"
                 result.refined.append(best)
                 if R.keep_traces:

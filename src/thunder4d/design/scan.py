@@ -173,7 +173,7 @@ class DesignMap:
         return self._scale(self.x_name, val(self.x_name)), self._scale(self.y_name, val(self.y_name))
 
 
-def design_map(problem, *, gas, roc_m, k=1, branch="concentric", x=None, y=None, quick=None,
+def design_map(problem, *, gas, roc_m, k=1, round_trips=None, branch="concentric", x=None, y=None, quick=None,
                coating=None, diameter_inch=None, pass_offset=0, workers=None):
     """Scan two parameters, everything else fixed. Default axes: x = pressure (from the pressure
     constraint, 41 points), y = round trips (SearchSpace.round_trips).
@@ -182,6 +182,7 @@ def design_map(problem, *, gas, roc_m, k=1, branch="concentric", x=None, y=None,
              duration_fs. n_passes as an axis keeps the geometry (M, k) and must stay <= 2 M.
     k      : fixed index, or "smallest" (smallest valid k for each M). Points where (M, k) is not a
              valid Herriott geometry are left blank.
+    round_trips : fixed number of round trips M; required unless round_trips is a scanned axis.
     quick  : None -> AnalyticQuick (instant); Fast1DQuick() for 1+1D accuracy (use workers)."""
     C, S = problem.constraints, problem.search
     res, (pmin, pmax) = C.pressure.resolution_bar, C.pressure.pressure_bar
@@ -193,8 +194,11 @@ def design_map(problem, *, gas, roc_m, k=1, branch="concentric", x=None, y=None,
     quick = quick or AnalyticQuick()
     coat = coating or (C.mirrors.allowed_coatings or [Candidate.coating])[0]
     dia = diameter_inch or max(C.mirrors.allowed_diameters_inch)
-    base = {"gas": gas, "pressure_bar": 0.1, "roc_m": roc_m, "round_trips": 10, "k": 1 if k == "smallest" else k,
-            "branch": branch, "coating": coat, "diameter_inch": dia}
+    if "round_trips" not in (x[0], y[0]) and round_trips is None:
+        raise ValueError("design_map: give round_trips=M (the number of round trips of the cell) when "
+                         "round_trips is not one of the two scanned axes")
+    base = {"gas": gas, "pressure_bar": 0.1, "roc_m": roc_m, "round_trips": round_trips or 10,
+            "k": 1 if k == "smallest" else k, "branch": branch, "coating": coat, "diameter_inch": dia}
 
     tasks, where = [], []
     for i, yv in enumerate(y[1]):
@@ -223,6 +227,10 @@ def design_map(problem, *, gas, roc_m, k=1, branch="concentric", x=None, y=None,
             tasks.append((prob, quick, cand))
             where.append((i, j))
 
+    if not tasks:
+        raise ValueError(f"design_map: no valid Herriott geometry (k = {k}, round trips "
+                         f"{round_trips or list(y[1] if y[0] == 'round_trips' else x[1])}): k must be coprime "
+                         f"with the number of round trips and smaller than half of it")
     if workers and workers > 1:
         from concurrent.futures import ProcessPoolExecutor
 
