@@ -158,8 +158,10 @@ class Candidate:
             unit = _UNITS.get(name, "")
             if isinstance(lim, tuple):
                 lim_s = ", ".join(str(x) for x in lim)
-            else:
+            elif isinstance(lim, (int, float)):
                 lim_s = f"{lim:.4g}"
+            else:
+                lim_s = str(lim)
             val_s = f"{val:.4g}" if isinstance(val, (int, float)) else str(val)
             flag = "" if self.slacks.get(name, 0) >= 0 else "  <-- violated"
             lines.append(f"  {name + unit:<18}{val_s:>12}{op:>4}{lim_s:>12}{100 * self.slacks.get(name, 0):>8.0f}%"
@@ -324,6 +326,12 @@ def evaluate(problem: DesignProblem, cand: Candidate, metrics: dict):
 
     # pressure window (always hard)
     pmin, pmax = C.pressure.pressure_bar
+    # the quick solver stopped (shock, runaway): a hard violation of its own
+    if m.get("solver_failed"):
+        penalty = np.inf
+        slacks["simulation"] = -1.0
+        limits["simulation"] = ("stopped", "", "model", "hard")
+
     # always reported, so that a design stuck at the pressure ceiling shows it
     if not pmin <= cand.pressure_bar <= pmax:
         penalty = np.inf
@@ -392,9 +400,12 @@ def prefilter(problem, cand):
     w0, wm, _ = cand.linear_mode(las.lambda0)
     if not np.isfinite(w0):
         return [*out, "stability"]
-    # Kerr lensing can enlarge the mirror spot by up to (1 - P/Pcr_max)^(-1/4): fluence x sqrt(1 - .)
+    # The Kerr effect changes the spot sizes by up to (1 - P/Pcr_max)^(1/4) (smaller when matched,
+    # oscillating when not): every check below uses the most favourable size, so that no candidate
+    # that could pass is rejected.
     pmax = min(C.kerr.p_over_pcr.allowed() or 0.0, 0.99) if C.kerr.p_over_pcr.mode != "off" else 0.0
-    fluence = 2 * las.energy_J / (np.pi * wm ** 2) * 1e-4 * np.sqrt(1 - pmax)
+    shrink = (1 - pmax) ** 0.25
+    fluence = 2 * las.energy_J / (np.pi * (wm / shrink) ** 2) * 1e-4
     lim = C.mirrors.fluence
     s = lim.slack(fluence, get_mirror(cand.coating).lidt(las.duration_fs))
     if lim.mode == "hard" and s is not None and s < 0:
@@ -404,10 +415,9 @@ def prefilter(problem, cand):
     s = lim.slack(intensity, get_gas(cand.gas).ionization_threshold)
     if lim.mode == "hard" and s is not None and s < 0:
         out.append("ionization")
-    # spot pattern with the linear mirror spot (Kerr lensing only makes the spots larger)
     for name, key in (("spot_separation", "spot_separation_w"), ("edge_clearance", "edge_clearance_w")):
         lim = getattr(C.spots, "min_spot_separation_w" if name == "spot_separation" else "edge_clearance_w")
-        val = spot_pattern(problem, cand, wm).get(key)
+        val = spot_pattern(problem, cand, wm * shrink).get(key)
         s = lim.slack(val) if val is not None else None
         if lim.mode == "hard" and s is not None and s < 0:
             out.append(name)
@@ -536,6 +546,12 @@ class DesignResult:
                          f"{c.score:>8.3g}")
         return "\n".join(lines)
 
+    def export(self, path, which=0, **kw):
+        """Write a refined design (rank `which`, 0 = best) as a standard THUNDER4D input file."""
+        from .export import export
+        cand = sorted(self.refined or self.screened, key=lambda c: c.score)[which]
+        return export(self.problem, cand, path, **kw)
+
     def save_json(self, path):
         data = {"problem": self.problem.to_dict(),
                 "refined": [c.to_dict() for c in sorted(self.refined, key=lambda c: c.score)],
@@ -579,10 +595,22 @@ class MPCDesigner:
         self.problem, self.quick, self.verbose, self.workers = problem, quick, verbose, workers or 1
 
     # -------------------------------------------------------- step 1
-    def screen(self):
-        """Tier 0: analytic enumeration (geometry.py + estimators.py, next step)."""
-        raise NotImplementedError("tier-0 screening comes with geometry.py and estimators.py; "
-                                  "meanwhile pass candidates to refine() directly")
+    def screen(self, keep=None, **starting_kw):
+        """Tier 0: starting_points() evaluated with the analytic estimates (AnalyticQuick), the
+        `keep` best (diverse) kept for refine() (default 10 x n_candidates); their analytic
+        metrics are dropped so that refine() re-evaluates them with the quick solver."""
+        from .scan import AnalyticQuick
+        starts = starting_points(self.problem, verbose=self.verbose, **starting_kw)
+        tier0 = AnalyticQuick()
+        for c in starts:
+            evaluate(self.problem, c, tier0(self.problem, c).as_metrics())
+        keep = keep or 10 * self.problem.refinement.n_candidates
+        kept = select_diverse(starts, keep, self.problem.refinement.diversity)
+        if self.verbose:
+            n_ok = sum(np.isfinite(c.score) for c in starts)
+            print(f"screen: {len(starts)} starting points, {n_ok} feasible by the analytic estimates, "
+                  f"{len(kept)} kept for the quick solver")
+        return [replace(c, metrics={}, slacks={}, limits={}, warnings=[], score=np.inf) for c in kept]
 
     # -------------------------------------------------------- step 2
     def refine(self, candidates, max_attempts=None):
@@ -652,8 +680,9 @@ class MPCDesigner:
             t.metrics.pop("spectrum_nm", None)
         return best, trace
 
-    def run(self):
-        return self.refine(self.screen())
+    def run(self, keep=None, **starting_kw):
+        """screen() then refine(): starting points -> analytic ranking -> quick solver."""
+        return self.refine(self.screen(keep, **starting_kw))
 
     # -------------------------------------------------------- internals
     def _evaluate(self, cand):

@@ -15,7 +15,8 @@ Cell geometry convention
 A Herriott cell is set by its RoC R, the number of round trips M of one re-entrant cycle and the
 index k (coprime with M): d = R (1 + cos(pi k / M)) on the concentric branch (d > R) and
 d = R (1 - cos(pi k / M)) on the planar branch (d < R), k < M / 2. One cycle is 2 M passes
-(mirror-to-mirror transits) and puts M spots on each mirror. The number of passes actually used
+(a pass = transit over d + bounce, starting right after a mirror, as in the 4D code) and puts M
+spots on each mirror. The number of passes actually used
 can be anything from SearchSpace.min_passes to 2 M (odd: the beam leaves on the other mirror).
 
 Conventions

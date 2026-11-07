@@ -74,7 +74,7 @@ def test_coating_phase_has_the_tabulated_gdd():
 
 # ------------------------------------------------------------ candidates
 def test_candidate_geometry_matches_mpc_herriott():
-    cand = Candidate("Ar", 0.13, roc_m=2.0, round_trips=15, k=4, coating="generic_dielectric")
+    cand = Candidate("Ar", 0.13, roc_m=2.0, round_trips=15, k=4, coating="dielectric_1030nm")
     cell = cand.to_cell()
     assert isinstance(cell, MPC)
     assert cell.d == pytest.approx(cand.separation_m)

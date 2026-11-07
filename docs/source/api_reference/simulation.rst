@@ -4,6 +4,13 @@ thunder4d.simulation
 .. py:module:: thunder4d.simulation
 
 Driver: propagates a pulse through the cell and records diagnostics after every pass.
+
+**Pass convention** (the same as the 1+1D code of the design helper): the simulation starts right
+after a mirror (injection plane) and one pass is a transit over :math:`d` followed by a bounce on
+the next mirror, so :math:`N` passes are :math:`N` transits and :math:`N` bounces. The input pulse
+is given at the cell centre and moved to the injection plane by a linear half pass. Diagnostics
+are taken at the cell centre: after every pass, the field is imaged back to the centre by a linear
+half pass (the far field of the beam leaving the cell after that pass).
 :class:`~thunder4d.lensframe.LensFrameSimulation` (recommended) is a subclass with the same
 arguments, methods, history and saved file; only its mirror records are in frame coordinates.
 
@@ -59,7 +66,8 @@ arguments, methods, history and saved file; only its mirror records are in frame
 
       Current field as a :class:`~thunder4d.pulse.Pulse`.
 
-   **Other attributes:** ``Aw`` (current field), ``history``, ``passes_done``,
+   **Other attributes:** ``Aw`` (field after the last pass, seen at the cell centre),
+   ``state`` (the propagated field, right after the last bounce), ``history``, ``passes_done``,
    ``lam``, ``x``, ``theta``, ``prof_coord`` (sorted axes of the recorded quantities),
    ``solver``.
 

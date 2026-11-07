@@ -1,5 +1,13 @@
-"""Driver: propagates a Pulse through an MPC and records reduced diagnostics after every pass
-(cell centre plane). Full 3D fields are only written to disk for the passes you ask for."""
+"""Driver: propagates a Pulse through an MPC and records reduced diagnostics after every pass.
+
+Pass convention (same as the 1+1D code of the design helper): the simulation starts right after a
+mirror (injection plane) and one pass = transit over d + bounce on the next mirror, so N passes =
+N transits and N bounces, and the simulation ends right after the last bounce. The input Pulse is
+given at the cell centre, as built by Pulse.at_focus & co.; it is moved to the injection plane by
+a linear half pass. Diagnostics are taken at the cell centre (waist plane, where the modal
+decomposition on the cell eigenmodes is exact): after every pass, the field is imaged back to the
+centre by a linear half pass, i.e. the far field of the beam that leaves the cell after that pass.
+Full 3D fields are only written to disk for the passes you ask for."""
 import os
 import pickle
 import time
@@ -33,7 +41,10 @@ class MPCSimulation:
                      cut), mirror (cut)
     profile_axis   : 'x' or 'y'
 
-    Conventions: FAR FIELD = the cell centre (focus / waist plane, where the field is recorded);
+    Conventions: a pass = transit over d + bounce, starting right after a mirror (see the module
+    docstring). sim.Aw is the field after the last pass seen at the cell centre (linear half pass);
+    the propagated state itself (right after the last bounce) is sim.state.
+    FAR FIELD = the cell centre (focus / waist plane, where the diagnostics are taken);
     NEAR FIELD = the collimated beam, i.e. the angular spectrum of the cell-centre field
     (x_out = f * theta after a collimating lens of focal length f).
 
@@ -47,8 +58,10 @@ class MPCSimulation:
                  **solver_kw):
         self.grid = pulse.grid
         self.cell = cell
-        self.Aw = self.grid.asarray(pulse.Aw).copy()      # lives on the grid's device
         self.solver = solver or UPPESolver(self.grid, cell.medium, **solver_kw)
+        centre = self.grid.asarray(pulse.Aw).copy()       # lives on the grid's device
+        self.state = self._from_centre(centre.copy())     # right after a mirror (injection plane)
+        self._centre = (0, centre)                        # (passes, field seen at the centre)
         self.record_every, self.near, self.max_order = record_every, near_field, max_order
         self.save_fields, self.save_dir = set(save_fields), save_dir
         self.record_mirror, self.slit = record_mirror, slit
@@ -70,8 +83,8 @@ class MPCSimulation:
         self._peak_lam = None   # colour tracked by w_peak_*: spectral peak of the input pulse
         self.record(0)
 
-    def _mirror_profiles(self):
-        _, pr, _ = dg.profiles_1d(self.grid, self.Aw, self.prof_lams, self.prof_bw, self.prof_axis)
+    def _mirror_profiles(self, A):
+        _, pr, _ = dg.profiles_1d(self.grid, A, self.prof_lams, self.prof_bw, self.prof_axis)
         return pr.astype(np.float32)
 
     def record(self, p, mirror_fluence=None, mirror_profiles=None):
@@ -130,6 +143,20 @@ class MPCSimulation:
         if p in self.save_fields:
             np.save(os.path.join(self.save_dir, f"field_pass{p:03d}.npy"), A)
 
+    # ------------------------------------------------------------ field seen at the centre
+    @property
+    def Aw(self):
+        """Field after the last pass, imaged back to the cell centre (linear half pass)."""
+        if self._centre[0] != self.passes_done:
+            self._centre = (self.passes_done, self._centre_view(self.state))
+        return self._centre[1]
+
+    @Aw.setter
+    def Aw(self, value):
+        centre = self.grid.asarray(value)
+        self.state = self._from_centre(centre.copy())
+        self._centre = (self.passes_done, centre)
+
     # ------------------------------------------------------------ run
     def run(self, n_passes=None, verbose=True, max_seconds=None):
         """Run n_passes (default: until cell.n_passes). max_seconds: stop cleanly after the pass
@@ -140,13 +167,13 @@ class MPCSimulation:
             if max_seconds is not None and time.time() - t_start > max_seconds:
                 break
             p = self.passes_done + 1
-            self.Aw = self._to_mirror(self.Aw)
-            Fm = dg.fluence(self.grid, self.Aw).astype(np.float32) if self.record_mirror else None
-            Pm = self._mirror_profiles() if (self.record_mirror and self.prof_lams) else None
-            self.Aw = self._bounce(self.Aw)
-            self.Aw = self.solver.absorb(self.Aw)
-            self.Aw = self._to_centre(self.Aw)
-            self.Aw = self.solver.absorb(self.Aw, temporal=True)
+            A = self._to_centre(self.state)
+            A = self.solver.absorb(A)
+            A = self._to_mirror(A)
+            Fm = dg.fluence(self.grid, A).astype(np.float32) if self.record_mirror else None
+            Pm = self._mirror_profiles(A) if (self.record_mirror and self.prof_lams) else None
+            A = self._bounce(A)
+            self.state = self.solver.absorb(A, temporal=True)
             self.passes_done = p
             if p % self.record_every == 0 or p == self.cell.n_passes:
                 self.record(p, Fm, Pm)
@@ -159,15 +186,24 @@ class MPCSimulation:
                           f"steps {self.solver.nsteps} | {h['wall_s'][-1]:.0f} s", flush=True)
         return self
 
-    # one pass = centre -> mirror, bounce, mirror -> centre (LensFrameSimulation overrides these three)
+    # one pass = mirror -> centre, centre -> mirror, bounce (LensFrameSimulation overrides these),
+    # plus the two linear half passes between the injection plane and the centre
+    def _to_centre(self, Aw):
+        return self.solver.propagate(Aw, self.cell.d / 2)
+
     def _to_mirror(self, Aw):
         return self.solver.propagate(Aw, self.cell.d / 2)
 
     def _bounce(self, Aw):
         return self.cell.bounce(Aw, self.grid)
 
-    def _to_centre(self, Aw):
-        return self.solver.propagate(Aw, self.cell.d / 2)
+    def _from_centre(self, Aw):
+        """Cell centre -> plane right after a mirror (linear, backwards)."""
+        return self.solver.linear(Aw, -self.cell.d / 2)
+
+    def _centre_view(self, Aw):
+        """Plane right after a mirror -> cell centre (linear, on a copy)."""
+        return self.solver.linear(Aw.copy(), self.cell.d / 2)
 
     @property
     def done(self):
@@ -176,7 +212,7 @@ class MPCSimulation:
     # ------------------------------------------------------------ checkpoints (long runs)
     def checkpoint(self, path):
         """Save the full state so a long run can be resumed (sim.resume(path))."""
-        st = {"Aw": to_host(self.Aw), "history": self.history, "passes_done": self.passes_done,
+        st = {"state": to_host(self.state), "history": self.history, "passes_done": self.passes_done,
               "B": self.solver.B, "nsteps": self.solver.nsteps, "z": self.solver.z,
               "Ipeak": self.solver._Ipeak}
         with open(path, "wb") as f:
@@ -185,9 +221,13 @@ class MPCSimulation:
     def resume(self, path):
         with open(path, "rb") as f:
             st = pickle.load(f)
-        self.Aw = self.grid.asarray(st["Aw"])
         self.history = st["history"]
         self.passes_done = st["passes_done"]
+        if "state" in st:
+            self.state = self.grid.asarray(st["state"])
+            self._centre = (-1, None)
+        else:                     # checkpoint written before the injection-plane convention
+            self.Aw = st["Aw"]
         self.solver.B, self.solver.nsteps, self.solver.z = st["B"], st["nsteps"], st["z"]
         self.solver._Ipeak = st["Ipeak"]
         return self
@@ -221,5 +261,5 @@ class MPCSimulation:
         if fm:
             out["fluence_mirror"] = np.array(fm)
         if include_field:
-            out["Aw_final"] = to_host(self.Aw)
+            out["Aw_final"] = to_host(self.Aw)          # final field seen at the cell centre
         np.savez_compressed(path, **out)

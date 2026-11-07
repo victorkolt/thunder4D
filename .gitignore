@@ -12,3 +12,4 @@ out_*/
 benchmark/results/
 docs/source/benchmarks/
 examples/design_dummy.py
+examples/design_tutorial*.json

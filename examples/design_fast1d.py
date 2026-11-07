@@ -9,7 +9,7 @@ if __name__ == "__main__":
     problem = DesignProblem(laser=LaserSpec(energy_J=2e-3, duration_fs=190.0, rep_rate_Hz=10e3),
                             target=Target(objective="target_duration", target_duration_fs=40.0))
     problem.constraints.space.max_separation_m.value = 2.0      # [m]
-    problem.constraints.mirrors.allowed_coatings = ["generic_dielectric"]
+    problem.constraints.mirrors.allowed_coatings = ["dielectric_1030nm"]
     problem.refinement.n_candidates = 5
     problem.refinement.neighbour_n_passes = 1
     problem.refinement.max_evaluations = 40

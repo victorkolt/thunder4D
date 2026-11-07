@@ -159,14 +159,19 @@ def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=Tr
 
 class LensFrameSimulation(MPCSimulation):
     """MPCSimulation on a beam-following grid. Cell-centre records are physical; mirror records
-    are in frame coordinates (physical x = mirror_scale * x, fluence / mirror_scale**2)."""
+    and sim.state (right after a mirror) are in frame coordinates (physical x = mirror_scale * x,
+    fluence / mirror_scale**2)."""
 
     solver: LensFrameSolver
 
-    def __init__(self, pulse, cell, *, phi_max=0.02, gouy_step=0.05, **kw):
-        solver = LensFrameSolver(pulse.grid, cell, phi_max=phi_max, gouy_step=gouy_step)
+    def __init__(self, pulse, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True, **kw):
+        solver = LensFrameSolver(pulse.grid, cell, phi_max=phi_max, gouy_step=gouy_step,
+                                 self_steepening=self_steepening)
         self.mirror_scale = solver.s_m
         super().__init__(pulse, cell, solver=solver, **kw)
+
+    def _to_centre(self, Aw):
+        return self.solver.propagate_zeta(Aw, -self.solver.zeta_m, 0.0)
 
     def _to_mirror(self, Aw):
         return self.solver.propagate_zeta(Aw, 0.0, self.solver.zeta_m)
@@ -174,5 +179,8 @@ class LensFrameSimulation(MPCSimulation):
     def _bounce(self, Aw):
         return self.solver.mirror(Aw)
 
-    def _to_centre(self, Aw):
-        return self.solver.propagate_zeta(Aw, -self.solver.zeta_m, 0.0)
+    def _from_centre(self, Aw):
+        return self.solver.propagate_linear_zeta(Aw, 0.0, -self.solver.zeta_m)
+
+    def _centre_view(self, Aw):
+        return self.solver.propagate_linear_zeta(Aw.copy(), -self.solver.zeta_m, 0.0)

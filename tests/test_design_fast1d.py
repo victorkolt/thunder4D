@@ -100,8 +100,8 @@ def test_adapter_quick_result_feeds_evaluate():
     prob = problem()
     cand = Candidate("Ar", 0.6, 1.0, 10, 3)
     res = Fast1DQuick()(prob, cand)
-    assert len(res.mirror_fluence_J_cm2) == 19            # mirror-to-mirror transits: N - 1 bounces
-    assert len(res.duration_per_bounce_fs) == 19
+    assert len(res.mirror_fluence_J_cm2) == 20            # one bounce per pass
+    assert len(res.duration_per_bounce_fs) == 20
     assert 0 < res.main_peak_fraction <= 1
     evaluate(prob, cand, res.as_metrics())
     assert "fluence" in cand.limits and np.isfinite(cand.objective)
@@ -146,7 +146,7 @@ def test_finds_the_reference_cell():
                          target=Target(objective="target_duration", target_duration_fs=25.0))
     C = prob.constraints
     C.space.max_separation_m.value = 5.0
-    C.mirrors.allowed_coatings = ["generic_dielectric"]
+    C.mirrors.allowed_coatings = ["dielectric_1030nm"]
     C.kerr.b_per_pass_rad.value = 3.0
     C.mirrors.fluence.value = 0.7
     C.ionization.peak_intensity_W_cm2 = Max(3.5e13)

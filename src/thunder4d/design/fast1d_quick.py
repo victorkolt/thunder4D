@@ -9,8 +9,8 @@ Mapping design helper -> fast1d
 -------------------------------
 * gas data: n2 from the design gas catalogue (catalog.GASES, overridable), dispersion from
   thunder4d.materials: the same numbers as the 4D solver.
-* cell: d = Candidate.separation_m (R, M round trips, k), n_passes = Candidate.n_passes
-  mirror-to-mirror transits (n_passes - 1 bounces); the 4D MPC counts centre-to-centre passes.
+* cell: d = Candidate.separation_m (R, M round trips, k), n_passes = Candidate.n_passes. Same pass
+  convention as the 4D code: start right after a mirror, one pass = transit over d + bounce.
 * mirrors: R(lambda) and GDD(lambda) of the candidate's coating, per bounce. No clipping on the
   mirror edge (spot pattern constraints are evaluated separately).
 * input: energy reduced by Losses.mode_matching_efficiency;
@@ -113,16 +113,22 @@ class Fast1DQuick:
         inp = self.build_input(problem, cand)
         try:
             out = fast1d.simulate(inp)
-        except fast1d.BeamCollapse as err:   # rejected through the P/Pcr limit, not a crash
+        except fast1d.SimulationStopped as err:   # the model breaks down: rejected, not a crash
+            collapse = isinstance(err, fast1d.BeamCollapse)
+            extras = {"solver_warnings": [str(err)]}
+            if not collapse:
+                extras["solver_failed"] = str(err)
             return QuickResult(duration_fs=np.nan, peak_power_W=0.0, throughput=0.0,
-                               p_over_pcr=max(err.p_over_pcr, 1.0), extras={"solver_warnings": [str(err)]})
+                               p_over_pcr=max(err.p_over_pcr, 1.0) if collapse else None,
+                               b_total_rad=err.b_integral,
+                               b_per_pass_rad=err.b_integral / max(err.passes_done, 1), extras=extras)
         return self.to_quick_result(problem, cand, out)
 
     def to_quick_result(self, problem, cand, out: fast1d.MPCOutput) -> QuickResult:
         las = problem.laser
         gdd_fs2 = out.gdd_compression * 1e30
         throughput = out.energy_out / las.energy_J      # lossless compressor
-        nb = max(out.inp.n_passes - 1, 0)                      # bounces on the cavity mirrors
+        nb = out.inp.n_passes                                  # one bounce per pass
         fluence = 2 * out.pass_energy[:nb] / (np.pi * out.pass_w_mirror[:nb] ** 2) * 1e-4   # J/cm2
         coat = get_mirror(cand.coating)
         lam, s = out.spectrum_lambda("out")

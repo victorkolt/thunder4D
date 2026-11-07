@@ -213,7 +213,7 @@ class MPCInput:
     temperature: float = 293.15  # K
     roc: float = 1.0  # m, mirror radius of curvature
     length: float = 1.9  # m, mirror separation
-    n_passes: int = 20  # mirror-to-mirror transits
+    n_passes: int = 20  # passes = transit over d + bounce, starting right after a mirror
     mirror_reflectivity: float = 0.999  # energy, per bounce
     mirror_gdd: float = 0.0  # s^2 per bounce
     mirror_response: Callable[[np.ndarray], np.ndarray] | None = None
@@ -244,6 +244,9 @@ class MPCInput:
     auto_grid: bool | None = None  # enlarge the grid and re-run if the pulse reaches its edges
     compression: str = "peak"  # "peak" | "fwhm"
     points_per_fwhm: int = 16  # minimum samples per FTL FWHM for the compression analysis
+    # guards: stop (SimulationStopped) instead of crawling when the model breaks down
+    max_peak_growth: float = 20.0      # peak power / input peak power (shock, collapse)
+    max_steps_per_pass: int = 2000
     store_passes: bool = False  # keep the spectrum after every pass
 
     def __post_init__(self):
@@ -432,12 +435,17 @@ def _make_grid(inp):
     return t, om, dt
 
 
-class BeamCollapse(RuntimeError):
-    """Self-focusing collapse of the Gaussian beam (P > Pcr somewhere in the cell)."""
+class SimulationStopped(RuntimeError):
+    """The run was stopped because the model breaks down: beam collapse, optical shock / runaway
+    peak power, or step budget exhausted. Carries what was known when it stopped."""
 
-    def __init__(self, message, p_over_pcr):
+    def __init__(self, message, p_over_pcr=0.0, passes_done=0, b_integral=0.0):
         super().__init__(message)
-        self.p_over_pcr = p_over_pcr
+        self.p_over_pcr, self.passes_done, self.b_integral = p_over_pcr, passes_done, b_integral
+
+
+class BeamCollapse(SimulationStopped):
+    """Self-focusing collapse of the Gaussian beam (P > Pcr somewhere in the cell)."""
 
 
 def simulate(inp: MPCInput) -> MPCOutput:
@@ -445,7 +453,7 @@ def simulate(inp: MPCInput) -> MPCOutput:
 
     With inp.auto_grid, the grid is enlarged (shorter lambda_min, longer time window) and the
     run repeated, up to 3 times, while the pulse reaches the edges of the grid."""
-    with np.errstate(divide="ignore", invalid="ignore"):   # a collapsing beam raises BeamCollapse
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):   # a collapsing beam raises BeamCollapse
         out = _simulate(inp)
     tries = 0
     while inp.auto_grid and tries < 3 and any("edge" in w for w in out.warnings):
@@ -457,7 +465,7 @@ def simulate(inp: MPCInput) -> MPCOutput:
             grow["time_window"] = 2.0 * (inp.time_window or inp.time_window_factor * out.fwhm_in)
         runtime = out.runtime
         inp = replace(inp, **grow)
-        with np.errstate(divide="ignore", invalid="ignore"):
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
             out = _simulate(inp)
         out.runtime += runtime
         tries += 1
@@ -547,6 +555,7 @@ def _simulate(inp: MPCInput) -> MPCOutput:
     aw = fft(a0.astype(cdtype))
     energy_in = np.sum(np.abs(a0) ** 2) * dt
     b_axis, i_max, ratio_max, f_max, nsteps, drift = 0.0, 0.0, 0.0, 0.0, 0, 0.0
+    ppk0 = None
     np_ = inp.n_passes
     p_energy, p_b, p_wm, p_wmin, p_bw, p_fwhm = (np.zeros(np_) for _ in range(6))
     p_spec = np.zeros((np_, n)) if inp.store_passes else None
@@ -562,7 +571,15 @@ def _simulate(inp: MPCInput) -> MPCOutput:
             w_now = w_of(q)
             if not np.isfinite(w_now) or not np.isfinite(ppk):
                 raise BeamCollapse(f"beam collapse in pass {p + 1} at z = {z:.3f} m "
-                                   f"(P/Pcr reached {max(ratio_max, ppk / pcr):.2f})", max(ratio_max, ppk / pcr))
+                                   f"(P/Pcr reached {max(ratio_max, ppk / pcr):.2f})", max(ratio_max, ppk / pcr),
+                                   p, b_axis)
+            if ppk0 is None:
+                ppk0 = ppk
+            if ppk > inp.max_peak_growth * ppk0 or nsteps > inp.max_steps_per_pass * np_:
+                why = (f"peak power x{ppk / ppk0:.0f}" if ppk > inp.max_peak_growth * ppk0
+                       else f"more than {inp.max_steps_per_pass} steps per pass")
+                raise SimulationStopped(f"stopped in pass {p + 1}: {why} (optical shock or collapse, "
+                                        f"B = {b_axis:.0f} rad so far)", ratio_max, p, b_axis)
             g = gamma_w2 / w_now ** 2
             h_req = min(inp.dphi_max / (g * ppk), h_max)
             j = int(np.ceil(-nlev * np.log2(h_req / h_max) - 1e-9))
@@ -600,14 +617,15 @@ def _simulate(inp: MPCInput) -> MPCOutput:
         p_fwhm[p] = fwhm(t, np.abs(at).astype(float) ** 2)
         if p_spec is not None:
             p_spec[p] = np.fft.fftshift(spec) * dt**2 / (2 * np.pi)
-        if p < np_ - 1:  # bounce on a cavity mirror
-            f_max = max(f_max, 2.0 * p_energy[p] / (np.pi * p_wm[p] ** 2))
-            aw = aw * mirror
-            q = 1.0 / (1.0 / q - 2.0 / inp.roc)
+        # bounce on the next mirror: one pass = transit + bounce (as the 4D code)
+        f_max = max(f_max, 2.0 * p_energy[p] / (np.pi * p_wm[p] ** 2))
+        aw = aw * mirror
+        q = 1.0 / (1.0 / q - 2.0 / inp.roc)
 
     aw = aw.astype(complex)  # analysis and compression in double precision
     a_out = ifft(aw)
-    energy_out = p_energy[-1]
+    spec = np.abs(aw) ** 2   # after the last bounce
+    energy_out = spec.sum() * dt / n
 
     # --- grid diagnostics --------------------------------------------------------
     warnings = []

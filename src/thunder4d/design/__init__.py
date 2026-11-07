@@ -18,7 +18,9 @@ from .designer import (
     evaluate,
     starting_points,
 )
+from .export import Validation4D, export, to_input, validate_4d
 from .fast1d_quick import Fast1DQuick
+from .scan import AnalyticQuick, DesignMap, design_map
 from .specs import (
     LASER_PRESETS,
     Constraints,
@@ -45,8 +47,10 @@ from .specs import (
 
 __all__ = [
     "LASER_PRESETS",
+    "AnalyticQuick",
     "Candidate",
     "Constraints",
+    "DesignMap",
     "DesignProblem",
     "DesignResult",
     "Fast1DQuick",
@@ -70,8 +74,13 @@ __all__ = [
     "SpotConstraints",
     "Target",
     "Tolerance",
+    "Validation4D",
     "catalog",
+    "design_map",
     "evaluate",
+    "export",
     "register_laser_preset",
     "starting_points",
+    "to_input",
+    "validate_4d",
 ]
