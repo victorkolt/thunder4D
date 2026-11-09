@@ -4,6 +4,7 @@ A feature reaches the GUI by registering entries here, never by editing the main
 
     from thunder4d.gui.registry import PLOTS, PlotSpec
     PLOTS.register(PlotSpec("stokes", "Stokes parameters", draw_stokes, requires=("S0", "S1", "S2", "S3")))
+    # with  def draw_stokes(results, fig, options): ax = fig.add_subplot(); ...
 
 - PANELS  : tabs of the main window (simulation builder, design helper, run, results, batch scans, ...)
 - PLOTS   : figures of the results viewer, offered only when the results hold the keys they need
@@ -81,15 +82,26 @@ class PanelSpec:
 
 @dataclass(frozen=True)
 class PlotSpec:
-    """A figure of the results viewer. draw(results, fig) fills a matplotlib Figure from the results
-    (the arrays of MPCSimulation.save, by key). Offered only when every key of `requires` is present,
-    so a plot of a new output appears by itself for the runs that have it."""
+    """A figure of the results viewer. draw(results, fig, options) fills a matplotlib Figure from the
+    results (the arrays of MPCSimulation.save, by key; gui.results.Results). Offered only when every key
+    of `requires` is present, so a plot of a new output appears by itself for the runs that have it.
+
+    per_pass: the viewer shows a pass selector and passes options["index"] (index in results["pass"]).
+    data(results, options) -> {name: array}: what "Export data" writes (default: the `requires` arrays).
+    """
     key: str
     title: str
-    draw: Callable[[Mapping[str, Any], Any], None]
+    draw: Callable[[Mapping[str, Any], Any, Mapping[str, Any]], None]
     requires: tuple[str, ...] = ()
     order: float = 100.0
     group: str = ""
+    per_pass: bool = False
+    data: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any]] | None = None
+
+    def export_data(self, results: Mapping[str, Any], options: Mapping[str, Any]) -> Mapping[str, Any]:
+        if self.data is not None:
+            return self.data(results, options)
+        return {k: results[k] for k in self.requires}
 
     def available(self, results: Mapping[str, Any]) -> bool:
         return all(k in results for k in self.requires)

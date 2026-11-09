@@ -34,10 +34,10 @@ def test_registry_order_then_registration_order():
 
 def test_registry_rejects_duplicates_unless_replaced():
     reg = Registry("plot")
-    reg.register(PlotSpec("p", "first", draw=lambda r, f: None))
+    reg.register(PlotSpec("p", "first", draw=lambda r, f, o: None))
     with pytest.raises(ValueError, match="already registered"):
-        reg.register(PlotSpec("p", "second", draw=lambda r, f: None))
-    reg.register(PlotSpec("p", "second", draw=lambda r, f: None), replace=True)
+        reg.register(PlotSpec("p", "second", draw=lambda r, f, o: None))
+    reg.register(PlotSpec("p", "second", draw=lambda r, f, o: None), replace=True)
     assert reg["p"].title == "second"
     reg.unregister("p")
     assert len(reg) == 0
@@ -45,8 +45,8 @@ def test_registry_rejects_duplicates_unless_replaced():
 
 def test_plots_are_offered_only_when_their_data_is_there():
     reg = Registry("plot")
-    reg.register(PlotSpec("spectra", "Spectra", draw=lambda r, f: None, requires=("lam", "spectrum")))
-    reg.register(PlotSpec("stokes", "Stokes", draw=lambda r, f: None, requires=("S0",)))
+    reg.register(PlotSpec("spectra", "Spectra", draw=lambda r, f, o: None, requires=("lam", "spectrum")))
+    reg.register(PlotSpec("stokes", "Stokes", draw=lambda r, f, o: None, requires=("S0",)))
     assert [p.key for p in available_plots({"lam": 0, "spectrum": 0}, reg)] == ["spectra"]
 
 

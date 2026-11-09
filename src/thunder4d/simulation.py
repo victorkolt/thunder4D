@@ -262,6 +262,9 @@ class MPCSimulation:
         fm = [v for v in h["fluence_mirror"] if v is not None]
         if fm:
             out["fluence_mirror"] = np.array(fm)
+            # mirror records of a beam-following grid are in frame coordinates: x_phys = mirror_scale * x,
+            # fluence_phys = fluence / mirror_scale^2 (1 on a fixed grid)
+            out["mirror_scale"] = float(getattr(self, "mirror_scale", 1.0))
         if include_field:
             out["Aw_final"] = to_host(self.Aw)          # final field seen at the cell centre
         np.savez_compressed(path, **out)

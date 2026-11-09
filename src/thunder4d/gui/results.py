@@ -13,6 +13,21 @@ class Results(dict):
     def __init__(self, data: dict[str, Any], path: str | Path | None = None):
         super().__init__(data)
         self.path = Path(path) if path is not None else None
+        self.cache: dict[str, Any] = {}          # derived quantities (grid, compressed pulse, ...)
+
+    def grid(self) -> Any:
+        """The simulation grid, rebuilt on the CPU from the saved sizes and steps."""
+        if "grid" not in self.cache:
+            from ..grid import Grid
+
+            nx, ny, nt, dx, dy, dt = (float(v) for v in self["grid"])
+            dtype = self["Aw_final"].dtype if "Aw_final" in self else np.complex64
+            self.cache["grid"] = Grid(int(nx), dx, int(nt), float(self["lambda0"]), dt=dt, Ny=int(ny), dy=dy,
+                                      dtype=dtype, device="cpu")
+        return self.cache["grid"]
+
+    def passes(self) -> list[int]:
+        return [int(p) for p in self.get("pass", [])]
 
     @property
     def name(self) -> str:
