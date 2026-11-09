@@ -9,6 +9,7 @@ Requirements
 - SciPy ≥ 1.10 (installed automatically): ``scipy.fft`` is about 8× faster than
   ``numpy.fft`` for the 2D transforms and can use several cores
 - Matplotlib (optional: the example scripts and the plots of the design helper)
+- PySide6 and Matplotlib (optional: the graphical interface)
 
 No GPU and no compiled extension are needed. For an NVIDIA GPU, install CuPy
 (``uv pip install cupy-cuda12x``; RTX 50-series cards need CUDA 12.8 or newer): grids created with
@@ -24,6 +25,7 @@ The commands use `uv <https://docs.astral.sh/uv/>`_. In a uv project:
    uv add thunder4d                 # numpy + scipy
    uv add "thunder4d[examples]"     # + matplotlib, for the examples and the plots
    uv add "thunder4d[gpu]"          # + CuPy, for an NVIDIA GPU
+   uv add "thunder4d[gui]"          # + PySide6 and matplotlib, for the graphical interface (thunder4d-gui)
 
 In an existing environment (venv, conda), use ``uv pip install`` with the same arguments.
 

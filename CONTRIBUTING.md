@@ -13,6 +13,8 @@ uv run --extra examples --with jupyter jupyter lab    # tutorial and benchmark n
 ```
 
 The package lives in `src/thunder4d/`. Add `--extra gpu` for CuPy.
+The graphical interface (`src/thunder4d/gui/`) starts with `uv run thunder4d-gui [input.json]`; PySide6 is in the dev group.
+To add a panel, a results plot or a live metric, register it in `thunder4d.gui.registry` (see its docstring).
 
 ## Tests
 
@@ -21,7 +23,7 @@ uv run pytest
 ```
 
 Each test checks one property (a convention, a normalisation or one physical term), so a failure points at one function.
-The suite runs in about 20 s. The GPU test is skipped when CuPy has no CUDA device.
+The suite runs in about 20 s. The GUI tests run offscreen (`QT_QPA_PLATFORM=offscreen`, set in `tests/conftest.py`). The GPU test is skipped when CuPy has no CUDA device.
 Every pull request runs the tests (`.github/workflows/tests.yml`, Python 3.10 and 3.14) and builds the documentation.
 
 ## Lint and type check
