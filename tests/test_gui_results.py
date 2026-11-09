@@ -142,3 +142,15 @@ def test_unreadable_file_is_refused(panel, tmp_path, monkeypatch):
     monkeypatch.setattr(QtWidgets.QMessageBox, "warning", lambda *a: warnings.append(a))
     (tmp_path / "bad.npz").write_text("not a zip")
     assert not panel.open_file(tmp_path / "bad.npz") and warnings
+
+
+def test_pulse_figure_of_a_large_grid(panel, saved, monkeypatch):
+    """Grids too large to oversample use dg.compress directly."""
+    monkeypatch.setattr(plots, "OVERSAMPLED_SIZE", 0)
+    built, path = saved
+    panel.open_file(path)
+    select(panel, "pulse")
+    assert panel.message.text() == ""
+    c = panel.results.cache["compress"]
+    assert len(c["t_fs"]) == built.grid.Nt                     # not oversampled
+    assert c["fwhm_fs"] == pytest.approx(dg.compress(built.grid, built.sim.Aw)["fwhm_fs"])

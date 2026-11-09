@@ -54,10 +54,13 @@ class _ThreadStdout:
         return self.targets.get(threading.get_ident(), self.fallback)
 
     def write(self, text: str) -> int:
-        return self._target().write(text)
+        target = self._target()
+        return len(text) if target is None else target.write(text)      # None: no console (pythonw)
 
     def flush(self) -> None:
-        self._target().flush()
+        target = self._target()
+        if target is not None:
+            target.flush()
 
     def __getattr__(self, name: str) -> Any:        # encoding, isatty, ... of the real stdout
         return getattr(self.fallback, name)

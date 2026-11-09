@@ -3,7 +3,7 @@ thunder4d.grid
 
 .. py:module:: thunder4d.grid
 
-Simulation grid and FFT conventions (see :doc:`../overview/conventions`).
+Simulation grid and FFT conventions (see :doc:`../quickstart`).
 
 .. py:data:: C0
 
@@ -92,7 +92,7 @@ FFT
 
 .. py:class:: FFT(backend="auto", workers=None)
 
-   Thin wrapper applying the conventions of :doc:`../overview/conventions`.
+   Thin wrapper applying the conventions of :doc:`../quickstart`.
 
    .. py:method:: fft2(a)
 

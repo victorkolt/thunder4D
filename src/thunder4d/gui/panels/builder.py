@@ -146,17 +146,13 @@ class BuilderPanel(QtWidgets.QWidget):
         self._refresh_timer.start()
 
     def _on_session_config(self, cfg: dict[str, Any] | None) -> None:
-        """An input sent by another panel (e.g. the design helper): asks before replacing unsaved edits;
-        the new input is unsaved too (no file yet), so closing the window asks before losing it."""
+        """An input sent by another panel (e.g. the design helper): asks before replacing unsaved edits."""
         if self._publishing or cfg is None:
             return
         if not self.confirm_discard():
             self.refresh()                          # the session keeps showing this panel's input
             return
         self.load_config(cfg, self.session.config_path)
-        if self.session.config_path is None:
-            self.modified = True
-            self.refresh()
 
     def _publish(self) -> None:
         self._publishing = True

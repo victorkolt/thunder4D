@@ -188,3 +188,22 @@ def test_two_tasks_keep_their_own_output(qtbot):
     assert run_lines == [f"run {i}" for i in range(5)] and design_lines == ["design"]
     sys.stdout.write("")                      # main thread still prints to the real stdout
     assert getattr(sys.stdout, "fallback", sys.stdout) is stdout
+
+
+def test_task_without_console(qtbot, monkeypatch):
+    """pythonw: sys.stdout is None; a print outside a task is dropped instead of raising."""
+    import sys
+
+    from thunder4d.gui.worker import _thread_stdout
+
+    monkeypatch.setattr(sys, "stdout", None)
+    out = _thread_stdout()
+    assert out.write("ignored") == len("ignored")
+    out.flush()
+    lines = []
+    task = Task(lambda t: print("from the task"))
+    task.output.connect(lines.append)
+    with qtbot.waitSignal(task.succeeded):
+        task.start()
+    task.wait()
+    qtbot.waitUntil(lambda: lines == ["from the task"])

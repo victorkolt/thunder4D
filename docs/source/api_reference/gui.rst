@@ -3,7 +3,7 @@ thunder4d.gui
 
 .. py:module:: thunder4d.gui
 
-Graphical interface (optional: ``uv add "thunder4d[gui]"``), see :doc:`../gui/gui`. Importing
+Graphical interface (optional: ``uv add "thunder4d[gui]"``), see :doc:`../gui`. Importing
 ``thunder4d.gui`` and ``thunder4d.gui.registry`` does not import Qt.
 
 .. py:function:: main(argv=None)

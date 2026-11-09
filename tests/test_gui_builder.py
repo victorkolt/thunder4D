@@ -199,4 +199,6 @@ def test_input_from_another_panel_asks_before_replacing_edits(qtbot, builder, mo
     monkeypatch.setattr(QtWidgets.QMessageBox, "question", answer(QtWidgets.QMessageBox.StandardButton.Yes))
     builder.session.set_config(small_input(medium={"gas": "Ne", "pressure_bar": 2.0}))
     assert builder.editors["medium.gas"].value() == "Ne"
-    assert builder.modified                                                  # not saved anywhere yet
+    answers.clear()
+    builder.session.set_config(small_input(medium={"gas": "Kr", "pressure_bar": 1.0}))   # next design
+    assert not answers and builder.editors["medium.gas"].value() == "Kr"                # no edit: no question

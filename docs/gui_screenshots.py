@@ -1,4 +1,4 @@
-"""Screenshots of the GUI tutorial (docs/source/gui/gui.rst), taken offscreen.
+"""Screenshots of the GUI page (docs/source/gui.rst), taken offscreen.
 
     uv run python docs/gui_screenshots.py        # about a minute; writes docs/source/_static/figures/gui_*.png
 
@@ -52,9 +52,6 @@ def main():
     design.start()
     wait(app, design)
     shot(app, window, "design")
-    design.compute_map()
-    wait(app, design)
-    shot(app, window, "design_map")
 
     # 2) builder, filled from the best design
     design.use_in_builder()
@@ -72,7 +69,7 @@ def main():
     # 4) results
     window.show_panel("results")
     results = window.panels["results"]
-    for key in ("spectra", "pulse"):
+    for key in ("pulse",):
         root = results.list.invisibleRootItem()
         items = [root.child(i).child(j) for i in range(root.childCount()) for j in range(root.child(i).childCount())]
         results.list.setCurrentItem(next(it for it in items if it.data(0, 256) == key))
