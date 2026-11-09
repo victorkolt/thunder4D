@@ -17,6 +17,8 @@ The graphical interface (`src/thunder4d/gui/`) starts with `uv run thunder4d-gui
 To add a panel, a results plot or a live metric, register it in `thunder4d.gui.registry` (see its docstring).
 A new key of the input file needs its `Field` in `thunder4d.inputfile.FIELDS` (a test checks it): the simulation builder then
 shows it with no other change. A new kind of field needs an editor in `thunder4d.gui.fields.EDITORS`.
+A knob of the design helper is shown in the GUI by adding it to `DESIGN_FIELDS` (`thunder4d/gui/panels/design.py`).
+Long computations run in a `thunder4d.gui.worker.Task` (background thread, prints relayed, Stop via `task.check()`).
 
 ## Tests
 

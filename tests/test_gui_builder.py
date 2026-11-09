@@ -172,4 +172,4 @@ def test_builder_is_a_tab_of_the_main_window(qtbot):
     win = MainWindow()
     qtbot.addWidget(win)
     assert isinstance(win.panels["builder"], BuilderPanel)
-    assert win.tabs.tabText(0) == "Simulation"
+    assert win.tabs.tabText(win.tabs.indexOf(win.panels["builder"])) == "Simulation"

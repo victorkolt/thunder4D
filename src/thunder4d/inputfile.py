@@ -113,6 +113,7 @@ class Field:
     shown value = file value / scale (e.g. energy_J shown in mJ: scale = 1e-3).
 
     kind: float | int | bool | choice | text | multiline | table | float_or_table | info | hidden
+          (the GUI also has float_list and multichoice, for forms other than the input file)
           table: {column: [...]} with the keys `columns` (the first one is the wavelength);
           float_or_table: a scalar, or a table as above; info: shown, not edited (design provenance);
           hidden: kept as is, not shown.

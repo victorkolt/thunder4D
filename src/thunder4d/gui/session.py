@@ -15,6 +15,7 @@ from ._qt import QtCore
 class Session(QtCore.QObject):
     config_changed = QtCore.Signal(object)      # the input (dict of the standard input file), or None
     results_changed = QtCore.Signal(object)     # the results (mapping of arrays, by key), or None
+    panel_requested = QtCore.Signal(str)        # a panel asks the window to show another one (registry key)
 
     def __init__(self, parent: QtCore.QObject | None = None):
         super().__init__(parent)
@@ -26,6 +27,9 @@ class Session(QtCore.QObject):
         self.config = cfg
         self.config_path = Path(path) if path is not None else None
         self.config_changed.emit(cfg)
+
+    def show_panel(self, key: str) -> None:
+        self.panel_requested.emit(key)
 
     def set_results(self, results: Any) -> None:
         self.results = results

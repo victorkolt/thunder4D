@@ -413,10 +413,65 @@ class HiddenEditor(FieldEditor):
         self._value = value
 
 
+class FloatListEditor(FieldEditor):
+    """Numbers separated by commas or spaces, e.g. allowed radii of curvature: 0.5, 1, 2."""
+
+    def make_input(self) -> QtWidgets.QLineEdit:
+        edit = QtWidgets.QLineEdit()
+        edit.textEdited.connect(self.changed)
+        edit.setPlaceholderText("values separated by commas" if not self.field.optional else self.field.none_text)
+        return edit
+
+    def value(self) -> list[float] | None:
+        assert isinstance(self.input, QtWidgets.QLineEdit)
+        text = self.input.text().strip()
+        if not text:
+            return None
+        out = []
+        for item in re.split(r"[,;\s]+", text):
+            try:
+                out.append(float(item) * self.field.scale)
+            except ValueError:
+                raise ValueError(f"{item!r} is not a number") from None
+        return out
+
+    def set_value(self, value: Any) -> None:
+        assert isinstance(self.input, QtWidgets.QLineEdit)
+        self.input.setText("" if value is None else ", ".join(format_number(v / self.field.scale) for v in value))
+
+
+class MultiChoiceEditor(FieldEditor):
+    """Several choices among Field.choices (check boxes, a few per row)."""
+    per_row = 4
+
+    def make_input(self) -> QtWidgets.QWidget:
+        box = QtWidgets.QWidget()
+        grid = QtWidgets.QGridLayout(box)
+        grid.setContentsMargins(0, 0, 0, 0)
+        self.boxes: dict[Any, QtWidgets.QCheckBox] = {}
+        for i, choice in enumerate(self.field.choices):
+            check = QtWidgets.QCheckBox(str(choice))
+            check.toggled.connect(self.changed)
+            self.boxes[choice] = check
+            grid.addWidget(check, i // self.per_row, i % self.per_row)
+        grid.setColumnStretch(self.per_row, 1)
+        return box
+
+    def value(self) -> list[Any]:
+        return [c for c, check in self.boxes.items() if check.isChecked()]
+
+    def set_value(self, value: Any) -> None:
+        chosen = set(value or ())
+        for c, check in self.boxes.items():
+            check.blockSignals(True)
+            check.setChecked(c in chosen)
+            check.blockSignals(False)
+
+
 EDITORS: dict[str, type[FieldEditor]] = {
     "float": FloatEditor, "int": IntEditor, "bool": BoolEditor, "choice": ChoiceEditor, "text": TextEditor,
     "multiline": MultilineEditor, "info": InfoEditor, "table": TableEditor, "float_or_table": FloatOrTableEditor,
-    "hidden": HiddenEditor,
+    "hidden": HiddenEditor, "float_list": FloatListEditor, "multichoice": MultiChoiceEditor,
 }
 
 

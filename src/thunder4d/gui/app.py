@@ -28,8 +28,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self._add_panel(spec)
         if not self.panels:
             self.tabs.addTab(self._message("No panel registered yet."), "Welcome")
+        self.session.panel_requested.connect(self.show_panel)
         self._menus()
         self.statusBar().showMessage(f"thunder4d {version('thunder4d')}")
+
+    def show_panel(self, key: str) -> None:
+        if key in self.panels:
+            self.tabs.setCurrentWidget(self.panels[key])
 
     def _add_panel(self, spec: PanelSpec) -> None:
         try:
