@@ -397,6 +397,12 @@ class DesignPanel(QtWidgets.QWidget):
         self.tabs.setCurrentIndex(1)
         self._run(Task(work, self), "Mapping…", draw)
 
+    def can_close(self) -> bool:
+        if self.task is not None:
+            self.task.cancel()
+            self.task.wait()
+        return True
+
     def save_results(self) -> None:
         if self.result is None:
             return

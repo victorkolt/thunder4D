@@ -48,8 +48,9 @@ class MPCSimulation:
     NEAR FIELD = the collimated beam, i.e. the angular spectrum of the cell-centre field
     (x_out = f * theta after a collimating lens of focal length f).
 
-    history keys include wx, wy (second-moment radius per colour, on sim.lam) and w_peak_x,
-    w_peak_y (the same radius [m] at the spectral peak of the input pulse, one value per pass).
+    history keys include wx, wy (second-moment radius per colour, on sim.lam), w_peak_x,
+    w_peak_y (the same radius [m] at the spectral peak of the input pulse, one value per pass) and
+    peak_intensity (max of |E(x, y, t)|^2 at the cell centre [W/m^2], one value per record).
     """
 
     def __init__(self, pulse, cell, *, solver=None, record_every=1, near_field=True, max_order=6,
@@ -75,7 +76,7 @@ class MPCSimulation:
             self.w0_of_lambda = lambda lam: w_ref * np.sqrt(lam / lam0)
         self.passes_done = 0
         self.history = {k: [] for k in (
-            "pass", "energy", "B", "peak_power", "spectrum", "fluence", "fluence_mirror",
+            "pass", "energy", "B", "peak_power", "peak_intensity", "spectrum", "fluence", "fluence_mirror",
             "sgram_x", "sgram_theta", "eta00", "eta00_total", "order_frac", "V_near", "V_far",
             "wx", "wy", "w_peak_x", "w_peak_y", "M2x", "M2y", "M2x_mean", "M2y_mean", "wall_s",
             "prof_far", "prof_far_proj", "prof_near", "prof_mirror", "band_energy")}
@@ -109,6 +110,7 @@ class MPCSimulation:
         h["energy"].append(g.energy(Ad))
         h["B"].append(self.solver.B)
         h["peak_power"].append(Pulse(g, Ad).peak_power())
+        h["peak_intensity"].append(self.solver.peak_intensity(Ad))     # W/m^2, at the cell centre
         lam, S = dg.total_spectrum(g, A)
         h["spectrum"].append(S)
         h["fluence"].append(dg.fluence(g, A).astype(np.float32))

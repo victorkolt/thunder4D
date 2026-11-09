@@ -54,6 +54,15 @@ class MainWindow(QtWidgets.QMainWindow):
         label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         return label
 
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
+        """Panels with a can_close() method (unsaved input, running computation) may refuse."""
+        for widget in self.panels.values():
+            can_close = getattr(widget, "can_close", None)
+            if can_close is not None and not can_close():
+                event.ignore()
+                return
+        event.accept()
+
     def _menus(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
         quit_action = file_menu.addAction("&Quit")

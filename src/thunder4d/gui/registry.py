@@ -98,7 +98,8 @@ class PlotSpec:
 @dataclass(frozen=True)
 class MetricSpec:
     """A quantity followed live during a run: the last value of history[key], times `scale`, in `unit`.
-    warn_above: the monitor flags values beyond it (e.g. a damage threshold)."""
+    warn_above: the monitor flags values beyond it (e.g. a damage threshold); plot: also drawn versus pass.
+    Metrics whose key the run does not record are not shown."""
     key: str
     label: str
     unit: str = ""
@@ -106,6 +107,7 @@ class MetricSpec:
     order: float = 100.0
     fmt: str = "{:.4g}"
     warn_above: float | None = None
+    plot: bool = True
 
     def value(self, history: Mapping[str, Sequence[Any]]) -> float | None:
         values = history.get(self.key)

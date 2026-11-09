@@ -236,6 +236,9 @@ class BuilderPanel(QtWidgets.QWidget):
         answer = QtWidgets.QMessageBox.question(self, "Unsaved changes", "Discard the changes to the current input?")
         return answer == QtWidgets.QMessageBox.StandardButton.Yes
 
+    def can_close(self) -> bool:
+        return self.confirm_discard()
+
     def new(self) -> None:
         if self.confirm_discard():
             self.load_config(default_input(), None)

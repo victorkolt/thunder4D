@@ -73,6 +73,16 @@ def test_save_writes_the_history_and_the_final_field(linear_cell, tmp_path):
         assert f["Aw_final"].shape == g.shape
 
 
+def test_peak_intensity_of_the_input_is_that_of_a_gaussian_at_focus(linear_cell):
+    """I0 = 2 P / (pi w0^2) at the waist, for the peak power of the pulse."""
+    g = make_grid(linear_cell)
+    sim = run(eigenmode_pulse(linear_cell, g), linear_cell, 1)
+    w0 = linear_cell.linear_mode(LAM0)["w0"]
+    expected = 2 * sim.history["peak_power"][0] / (np.pi * w0 ** 2)
+    assert sim.history["peak_intensity"][0] == pytest.approx(expected, rel=0.03)
+    assert len(sim.history["peak_intensity"]) == 2
+
+
 # ------------------------------------------------------------ nonlinear: matched gaussian in argon
 @pytest.fixture(scope="module")
 def kerr():
