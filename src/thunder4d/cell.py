@@ -69,9 +69,8 @@ class MPC:
         wm = np.sqrt(lm * self.R / np.pi * np.sqrt(self.d / (2 * self.R - self.d)))
         return {"w0": w0, "w_mirror": wm, "zR": np.pi * w0 ** 2 / lm, "gouy_per_pass": self.theta}
 
-    def nonlinear_mode(self, P, lam=None, verbose=False):
-        """Kerr-lens matched eigenmode for power P [W]."""
-        lam = lam or self._lam0
+    def nonlinear_mode(self, P, lam, verbose=False):
+        """Kerr-lens matched eigenmode for power P [W] at wavelength lam [m]."""
         Pc = self.medium.critical_power(lam)
         r = P / Pc
         if r >= 1:
@@ -90,16 +89,17 @@ class MPC:
             print(self.report(out))
         return out
 
-    def match(self, pulse, power="peak", verbose=True):
-        """Nonlinear mode matching from a Pulse (or a power in W). power: 'peak' | 'weighted'."""
-        self._lam0 = pulse.grid.lambda0 if hasattr(pulse, "grid") else self._lam0
+    def match(self, pulse, power="peak", verbose=True, lam=None):
+        """Nonlinear mode matching from a Pulse (wavelength: its grid's lambda0), or from a power in W
+        with its wavelength lam [m]. power: 'peak' | 'weighted'."""
         if hasattr(pulse, "grid"):
             P = pulse.peak_power() if power == "peak" else pulse.weighted_power()
+            lam = pulse.grid.lambda0
+        elif lam is None:
+            raise ValueError("match(power): give the wavelength, e.g. cell.match(5e9, lam=800e-9)")
         else:
             P = float(pulse)
-        return self.nonlinear_mode(P, self._lam0, verbose=verbose)
-
-    _lam0 = 1030e-9
+        return self.nonlinear_mode(P, lam, verbose=verbose)
 
     def report(self, m=None):
         s = (f"MPC: R = {self.R:.3f} m, d = {self.d:.4f} m, {self.n_passes} passes, "

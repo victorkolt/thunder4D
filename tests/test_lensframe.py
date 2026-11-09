@@ -83,3 +83,17 @@ def test_lens_frame_spectrum_matches_the_standard_solver(kerr_pair):
     Sa, Sb = Sa / Sa.max(), np.interp(la, lb, Sb / Sb.max())
     similarity = np.trapezoid(np.sqrt(Sa * Sb), la) ** 2 / (np.trapezoid(Sa, la) * np.trapezoid(Sb, la))
     assert similarity > 0.9999
+
+
+def test_saved_mirror_fluence_converts_to_the_physical_mirror_spot(tmp_path):
+    """Mirror records are in frame units; the saved mirror_scale gives back the physical spot w_mirror."""
+    cell = near_concentric(vacuum(), n_passes=1)
+    g = lens_grid(cell)
+    sim = m.LensFrameSimulation(eigenmode_pulse(cell, g), cell, near_field=False).run(verbose=False)
+    sim.save(tmp_path / "run.npz")
+    with np.load(tmp_path / "run.npz") as f:
+        s, F = float(f["mirror_scale"]), f["fluence_mirror"][0]
+    x = (np.arange(F.shape[0]) - F.shape[0] / 2) * g.dx * s
+    px = F.sum(axis=1) / F.sum()
+    w = 2 * np.sqrt((px * x ** 2).sum())
+    assert w == pytest.approx(cell.linear_mode(LAM0)["w_mirror"], rel=0.03)

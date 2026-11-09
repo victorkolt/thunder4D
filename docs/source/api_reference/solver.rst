@@ -3,7 +3,7 @@ thunder4d.solver
 
 .. py:module:: thunder4d.solver
 
-UPPE propagator on a fixed grid (standard, non-paraxial). See :doc:`../overview/overview` for
+UPPE propagator on a fixed grid (standard, non-paraxial). See :doc:`../user_guide/simulation` for
 the equation and the scheme, and :class:`~thunder4d.lensframe.LensFrameSolver` for the
 beam-following solver.
 
@@ -36,7 +36,7 @@ beam-following solver.
 
       Kerr right-hand side :math:`i\gamma\,\mathcal F_t[|A|^2A]`. With ``track=True`` it
       updates the peak intensity used for step control. Override it to add physics
-      (see :doc:`../advanced/extending`).
+      (see :doc:`../user_guide/simulation`).
 
    .. py:method:: peak_intensity(Aw)
 

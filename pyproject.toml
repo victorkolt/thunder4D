@@ -6,8 +6,8 @@ build-backend = "uv_build"
 name = "thunder4d"
 license = "MIT"
 license-files = ["LICENSE"]
-version = "1.2.0"
-description = "thunder4d: Transverse-resolved Herriott-cell UPPE solver for Nonlinear Dynamics close to Experimental Reality, 4D"
+version = "1.3.0"
+description = "4D pulse propagation in gas-filled multipass cells: UPPE solver, design helper and GUI"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Victor Koltalo", email = "victor.koltalo@ensta.fr" },
@@ -29,10 +29,16 @@ dependencies = [
 [project.optional-dependencies]
 examples = ["matplotlib"]
 gpu = ["cupy-cuda12x"]
+gui = ["pyside6-essentials>=6.12.0", "matplotlib>=3.10.9"]   # thunder4d-gui (Qt widgets + embedded plots)
 
 [dependency-groups]
-dev = ["matplotlib>=3.10.9", "pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.95"]   # matplotlib: plots (type-checked in CI)
+# matplotlib: plots, pyside6 + pytest-qt: GUI (type-checked and tested in CI)
+dev = ["matplotlib>=3.10.9", "pyside6-essentials>=6.12.0", "pytest>=9.2.0", "pytest-qt>=4.5.0", "ruff>=0.17.3",
+       "ty>=0.0.95"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
+
+[project.scripts]
+thunder4d-gui = "thunder4d.gui:main"   # installed always; says how to add the [gui] extra when it is missing
 
 [project.urls]
 Documentation = "https://victorkolt.github.io/thunder4D/"
@@ -40,6 +46,7 @@ Source = "https://github.com/victorkolt/thunder4D"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+qt_api = "pyside6"
 
 [tool.ruff]
 line-length = 120
