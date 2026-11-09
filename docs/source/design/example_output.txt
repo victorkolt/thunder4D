@@ -1,0 +1,23 @@
+.. code-block:: text
+
+    #  gas  p[bar]  R[m]   M   k    N     branch   d[m]  tau[fs]     T    score
+    0   Ar   0.170  2.00  15   2   29 concentric  3.827     25.4 0.986  0.00924
+    1   Kr   0.050  2.00  17   3   34 concentric  3.700     27.9 0.983   0.0215
+    2   Ar   0.110  3.00  25   7   50 concentric  4.912     29.6 0.975   0.0365
+
+   Ar 0.170 bar | R = 2.0 m, M = 15 round trips, k = 2, concentric, d = 3.827 m, 29 passes | dielectric_1030nm, 3"
+     output : 25.4 fs (from 500 fs, x19.7), throughput 98.6 %, peak power 435 GW
+     score  : 0.00924  = objective 0.000229 + penalties 0.00901   (lower is better)
+     limit                    value           limit   margin  mode
+     main_peak               0.6335  >=         0.7      -9%  soft  <-- violated
+     fluence [J/cm2]         0.5582  <=         0.7      20%  hard
+     b_per_pass [rad]         2.342  <=           3      22%  hard
+     throughput              0.9856  >=         0.8      23%  soft
+     separation [m]           3.827  <=           5      23%  hard
+     ionization [W/cm2]   2.416e+13  <=     3.5e+13      31%  hard
+     p_over_pcr              0.3405  <=         0.5      32%  hard
+     pressure [bar]            0.17  <=           3      94%  hard
+     bandwidth            7.976e-05  <=        0.01      99%  hard
+     spot_separation [w]       7.941  >=           3     165%  hard
+     spots  : 15 per mirror on r = 33.7 mm, 7.9 w apart
+     align  : d +- 1 mm -> w0 0.1 %, w_mirror 0.2 % | RoC +- 0.5 % -> w0 3.0 %, w_mirror 2.9 %

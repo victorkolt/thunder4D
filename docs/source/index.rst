@@ -27,6 +27,9 @@ Main features:
 - per-pass diagnostics: spatio-spectral traces :math:`S(x,\lambda)` and
   :math:`S(\theta,\lambda)`, Hermite–Gauss content, homogeneity, :math:`M^2`,
   wavelength-resolved beam profiles, compression,
+- a **design helper** that goes from an input laser and a target to a ready-to-run cell (gas, pressure,
+  radius of curvature, round trips), with the margin to every constraint, maps of the design space and
+  a standard JSON input file to run the chosen design,
 - pure Python: NumPy (+ SciPy FFT if available), optional GPU through CuPy, resumable long runs.
 
 .. figure:: _static/figures/clipped_far_field_log.png
@@ -40,7 +43,8 @@ Contents of the documentation
 -----------------------------
 
 If you are new to THUNDER4D, read :doc:`overview/overview` first, then
-:doc:`install/installation` and :doc:`how_to_run`. :doc:`benchmarks/index` compares the code with
+:doc:`install/installation` and :doc:`how_to_run`. To choose a cell for a given laser, start with the
+:doc:`design/design`. :doc:`benchmarks/index` compares the code with
 published experiments. The :doc:`api_reference/api_reference` lists every object of the package.
 
 .. toctree::
@@ -49,6 +53,7 @@ published experiments. The :doc:`api_reference/api_reference` lists every object
    overview/overview
    install/installation
    how_to_run
+   design/design
    examples/examples
    benchmarks/index
    api_reference/api_reference

@@ -107,14 +107,16 @@ Numerical scheme
 The step is :math:`h = \min\left(\texttt{gouy\_step}\cdot z_R,\;
 \varphi_\text{max}/(k_0 n_2 I_\text{peak})\right)`: ``gouy_step`` (default 0.05 rad) bounds the
 Gouy phase per step and controls the accuracy of diffraction, ``phi_max`` (default 0.02 rad)
-bounds the nonlinear phase per step. A pass is
+bounds the nonlinear phase per step. A pass, which starts right after a mirror, is
 
 .. code-block:: text
 
-   centre (zeta = 0) ──▶ mirror (zeta_m) │ bounce: spectral response + aperture │ (-zeta_m) ──▶ centre
+   (-zeta_m) ──▶ centre (zeta = 0) ──▶ mirror (zeta_m) │ bounce: spectral response + aperture
 
-with :math:`\zeta_m = z_R\arctan(d/2z_R)`, and the soft absorbers applied after the bounce and at
-the centre, as in the standard solver. The phase factors are rebuilt each step from 1D arrays,
+with :math:`\zeta_m = z_R\arctan(d/2z_R)`, and the soft absorbers applied at the centre and after the
+bounce, as in the standard solver. The pulse given at the centre is first moved to the injection
+plane (:math:`-\zeta_m`) by a linear half pass; the recorded field is brought back to the centre in
+the same way. The phase factors are rebuilt each step from 1D arrays,
 so no full-size linear operator or propagator cache is stored.
 
 Using it

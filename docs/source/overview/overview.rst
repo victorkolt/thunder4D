@@ -111,16 +111,22 @@ The multipass cell
 Unfolded picture
 ~~~~~~~~~~~~~~~~
 
-The cell is treated in the **unfolded** picture. One pass is
+The cell is treated in the **unfolded** picture. The simulation starts right after a mirror
+(the injection plane), and one pass is a transit over :math:`d` followed by a bounce on the next
+mirror:
 
 .. code-block:: text
 
-   cell centre ──(d/2)──▶ curved mirror ──(d/2)──▶ cell centre
+   mirror ──(d/2)──▶ cell centre ──(d/2)──▶ next mirror │ bounce
 
-so :math:`N` passes means :math:`N` mirror bounces. Diagnostics are recorded at the cell
-centre after every pass. That plane is the waist of the cell eigenmode with a flat
-wavefront, so a Hermite–Gauss decomposition there is exact. Data can also be recorded
-at the mirror plane, just before each bounce.
+so :math:`N` passes means :math:`N` transits over :math:`d` and :math:`N` bounces, and the run ends
+right after the last bounce. The pulse you build is defined at the cell centre; a linear half pass
+moves it back to the injection plane. Diagnostics are recorded at the cell centre after every pass:
+the field after the bounce is imaged back to the centre by a linear half pass, which is the far field
+of the beam that leaves the cell after that pass. That plane is the waist of the cell eigenmode with
+a flat wavefront, so a Hermite–Gauss decomposition there is exact. Data can also be recorded at
+the mirror plane, just before each bounce. The 1+1D solver of the :doc:`../design/design` uses the
+same convention, so that both can be compared pass by pass.
 
 Each bounce multiplies the field in :math:`(x, y, \Omega)` by
 

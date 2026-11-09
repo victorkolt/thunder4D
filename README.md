@@ -50,6 +50,27 @@ A full walkthrough with figures is in [`examples/tutorial.ipynb`](examples/tutor
 
 ---
 
+## Design helper and input files
+
+`thunder4d.design` goes from an input laser and a target to a ready-to-run cell: gas, pressure, radius of curvature, round trips and passes, with the margin to every constraint (fluence on the mirrors, cell length, P/Pcr, B-integral per pass, ionisation, spot pattern).
+
+```python
+from thunder4d.design import DesignProblem, Fast1DQuick, LaserSpec, MPCDesigner, Target, starting_points
+
+problem = DesignProblem(laser=LaserSpec(energy_J=18e-3, duration_fs=500.0),
+                        target=Target(objective="target_duration", target_duration_fs=25.0))
+result = MPCDesigner(problem, quick=Fast1DQuick()).refine(starting_points(problem))
+print(result.table())
+result.export("design.json")            # standard THUNDER4D input file
+```
+
+- **Search:** candidates are screened with closed-form estimates, then ranked and tuned with a fast 1+1D solver (30–100 ms per cell), in parallel if you ask for it.
+- **Maps:** `design_map` shows, for two parameters (pressure × round trips by default), which constraint limits each region.
+- **Input file:** a design is exported as a JSON input file (`thunder4d.load_input`, `thunder4d.run_input`) that the 4D solver runs as it is. `validate_4d` runs it on a coarse grid and compares it with the 1+1D prediction.
+- **Tutorial:** `examples/design_tutorial.ipynb`; documentation: page *Design helper*.
+
+The default limits are conservative starting points: set them to what your hardware takes (the documentation explains how to calibrate them on a cell that works). The helper is a pre-design tool: one stage, Gaussian beam, ideal GDD compressor, no Raman and no ionisation loss. Simulate the design you keep with the 4D solver.
+
 ## Physical model
 
 The field is a complex envelope A(x, y, t) with carrier exp[i(k₀z − ω₀t)], normalised so that |A|² is the intensity in W/m². It is propagated with the unidirectional pulse propagation equation (UPPE), written in the frame moving at the group velocity at λ₀:
@@ -72,7 +93,7 @@ The recommended solver (`LensFrameSimulation`, grid from `suggest_lens_grid`) pr
 
 - **the grid only holds the waist:** the eigenmode does not change size, so the box is a few waists wide whatever the mirror separation (75 points per axis instead of 480 for the tutorial cell, instead of 1125 for an 18 mJ cell at d = 0.995·2R);
 - **the mirror is the identity:** its curvature cancels the frame wavefront exactly; only its spectral response and aperture remain;
-- **the cell centre is physical** (s = 1): every diagnostic recorded there is unchanged. Mirror records are in frame coordinates; convert them with `sim.mirror_scale` (x_phys = s_m ξ, F_phys = F / s_m²).
+- **the cell centre is physical** (s = 1): every diagnostic recorded there is unchanged (a pass starts right after a mirror and is a transit over d plus a bounce; the recorded field is brought back to the centre). Mirror records are in frame coordinates; convert them with `sim.mirror_scale` (x_phys = s_m ξ, F_phys = F / s_m²).
 
 The frame equation is ∂B/∂ζ = (i/2k)∇²B − i k ρ² B / (2 z_R²) + i β s² B + i γ FT_t[|B|² B]: paraxial diffraction plus a harmonic potential (whose eigenstates are the Hermite–Gauss modes of the cell, so the Gouy phase per pass is built in), the gas dispersion over the physical length, and the unchanged Kerr term. The step is limited by both `phi_max` and `gouy_step` (maximum Gouy phase per step, default 0.05 rad). The standard non-paraxial fixed-grid solver below (`suggest_grid` + `MPCSimulation`) has the same interface and remains available for cross-checks; `tests/test_lensframe.py` checks that both agree within 0.5 %. Details: documentation, page *The lens frame*.
 

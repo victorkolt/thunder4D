@@ -119,3 +119,13 @@ standard metrics, each with the published value, a tolerance and a status) and `
 (``--sweep``), exports CSV, and builds the report of the reference runs (``--report``). The results
 of the reference runs are in :doc:`../benchmarks/index`; ``benchmark/README.md`` documents the
 options, the output format and how to add a new benchmark.
+
+Design helper
+-------------
+
+``examples/design_tutorial.ipynb`` is the tutorial of the :doc:`../design/design`: it designs the
+cell for an 18 mJ, 500 fs pulse compressed to 25 fs, explains every option on the way (laser,
+target, limits, constraints, catalogues, search space, refinement), exports the design as a standard
+input file, validates it with the 4D solver and maps the design space. ``examples/design_fast1d.py``
+runs the whole search and the validation as a script. Open the notebook with Jupyter
+(``uv run --with jupyter jupyter lab examples/design_tutorial.ipynb``).

@@ -2,8 +2,8 @@
 
 | Release | Content | Status |
 |---|---|---|
-| v1.1.0 | Standardized benchmark suite | Planned |
-| v1.2.0 | Design helper for gas-filled MPCs | Planned |
+| v1.1.0 | Standardized benchmark suite | Done |
+| v1.2.0 | Design helper for gas-filled MPCs | Done |
 | v1.3.0 | Graphical interface | Planned |
 | v1.4.0 | Multi-stage simulations | Planned |
 | v1.5.0 | Raman response | Planned |

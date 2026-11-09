@@ -1,8 +1,9 @@
 """Module 2: the multipass cell.
 
-Unfolded picture used by the solver: one pass = cell centre -> d/2 -> curved mirror -> d/2 -> cell
-centre. The field is recorded at the cell centre (waist plane of the eigenmode, flat phase) after
-every pass, which is where the modal decomposition on the cell eigenmodes is exact.
+Unfolded picture used by the solver: the simulation starts right after a mirror (injection plane)
+and one pass = transit over d (through the cell centre) + bounce on the next mirror, so N passes =
+N transits = N bounces. Diagnostics are taken at the cell centre (waist plane of the eigenmode,
+flat phase), where the modal decomposition on the cell eigenmodes is exact.
 
 Nonlinear mode matching (aberration-free Kerr lens, uniform medium, power P constant along a pass):
 the envelope equation of a gaussian becomes the linear one with lambda -> lambda sqrt(1 - P/Pc),
@@ -22,7 +23,7 @@ class MPC:
     R            : mirror radius of curvature [m]
     d            : mirror separation [m]
     medium       : Material
-    n_passes     : number of passes (centre -> mirror -> centre = 1 pass = 1 bounce)
+    n_passes     : number of passes (transit over d + bounce = 1 pass; starts right after a mirror)
     mirror_gdd_fs2, mirror_tod_fs3 : dispersion per bounce
     mirror_reflectivity : scalar, or callable R(lambda[m]) (intensity)
     mirror_phase : optional callable phi(lambda[m]) [rad] per bounce (measured GDD curves, ...)

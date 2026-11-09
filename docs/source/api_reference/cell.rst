@@ -13,7 +13,7 @@ eigenmode and the nonlinear mode matching.
    :param float R: mirror radius of curvature [m]
    :param float d: mirror separation [m], :math:`0 < d < 2R`
    :param medium: :class:`~thunder4d.materials.Material`
-   :param int n_passes: passes = bounces (centre → mirror → centre)
+   :param int n_passes: passes = bounces (transit over d + bounce, starting right after a mirror)
    :param float mirror_gdd_fs2: GDD per bounce [fs²]
    :param float mirror_tod_fs3: TOD per bounce [fs³]
    :param mirror_reflectivity: intensity reflectivity, scalar or callable
