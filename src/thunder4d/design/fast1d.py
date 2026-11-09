@@ -55,6 +55,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from typing import Any
 
 import numpy as np
 from scipy import fft as _fft
@@ -193,6 +194,9 @@ ACCURACY = {
 }
 
 
+_AUTO: Any = None   # "take the value from the accuracy preset" (see MPCInput.__post_init__)
+
+
 # --------------------------------------------------------------------------
 # Input
 # --------------------------------------------------------------------------
@@ -230,19 +234,21 @@ class MPCInput:
     aeff_factor: float = 1.0  # A_eff = aeff_factor * pi w^2
 
     # numerics (accuracy="fast" | "default" | "fine" sets all of them; explicit values win)
+    # The numerical settings default to _AUTO (None): __post_init__ takes them from the accuracy preset,
+    # so after construction they are never None (hence their plain types).
     accuracy: str | None = None
-    n_points: int | None = None  # minimum; increased to fit time_window
+    n_points: int = _AUTO  # minimum; increased to fit time_window
     time_window: float | None = None  # [s]; default: time_window_factor x input FWHM
-    time_window_factor: float | None = None
+    time_window_factor: float = _AUTO
     lambda_min: float | None = None  # shortest wavelength on grid; default lambda_min_factor x wavelength
-    lambda_min_factor: float | None = None
-    dphi_max: float | None = None  # max mean nonlinear phase per step [rad]
-    min_steps_per_pass: int | None = None
-    q_substeps: int | None = None  # beam (q) sub-steps per field step: cheap, lets the field take long steps
-    q_steps_per_zr: float | None = None  # and at least this many per Rayleigh length (0 = off)
-    precision: str | None = None  # "double" | "single" (complex64: ~2x faster)
-    fast_len: bool | None = None  # any 2^a 3^b 5^c grid size instead of a power of 2
-    auto_grid: bool | None = None  # enlarge the grid and re-run if the pulse reaches its edges
+    lambda_min_factor: float = _AUTO
+    dphi_max: float = _AUTO  # max mean nonlinear phase per step [rad]
+    min_steps_per_pass: int = _AUTO
+    q_substeps: int = _AUTO  # beam (q) sub-steps per field step: cheap, lets the field take long steps
+    q_steps_per_zr: float = _AUTO  # and at least this many per Rayleigh length (0 = off)
+    precision: str = _AUTO  # "double" | "single" (complex64: ~2x faster)
+    fast_len: bool = _AUTO  # any 2^a 3^b 5^c grid size instead of a power of 2
+    auto_grid: bool = _AUTO  # enlarge the grid and re-run if the pulse reaches its edges
     compression: str = "peak"  # "peak" | "fwhm"
     points_per_fwhm: int = 16  # minimum samples per FTL FWHM for the compression analysis
     # guards: stop (SimulationStopped) instead of crawling when the model breaks down

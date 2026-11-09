@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from math import log
+from typing import Any
 
 import numpy as np
 from scipy.constants import c as C0
@@ -81,7 +82,7 @@ class Fast1DQuick:
             # Coating.phase is in the thunder4d convention (+GDD/2 Om^2); fast1d uses the opposite sign
             return np.sqrt(coat.R(lam * 1e9)) * np.exp(-1j * coat.phase(lam, lam0))
 
-        kw = {"energy": las.energy_J * eta_in, "fwhm": tl, "wavelength": lam0,
+        kw: dict[str, Any] = {"energy": las.energy_J * eta_in, "fwhm": tl, "wavelength": lam0,
                   "shape": "sech2" if las.shape == "sech2" else "gaussian", "polarization": las.polarization,
                   "gas": cand.gas, "pressure": cand.pressure_bar, "roc": cand.roc_m, "length": cand.separation_m,
                   "n_passes": cand.n_passes, "mirror_response": mirror_response, "n2": n2_lin,

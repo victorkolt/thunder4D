@@ -30,6 +30,7 @@ Conventions
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Literal
 
@@ -216,7 +217,7 @@ class MirrorConstraints:
     allowed_roc_m: tuple[float, ...] = (0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
     allowed_diameters_inch: tuple[float, ...] = (3.0,)
     # cavity coatings allowed (names from the mirror catalogue); None = every cavity coating
-    allowed_coatings: tuple[str, ...] | None = None
+    allowed_coatings: Sequence[str] | None = None
     # peak fluence on the mirrors; value None -> LIDT of the coating at the local pulse duration
     fluence: Limit = field(default_factory=lambda: Max(None))
     # fraction of the output energy outside the coating band (spectral wings are never exactly 0)
@@ -296,7 +297,7 @@ class SearchSpace:
     gases: tuple[str, ...] | None = None              # None -> Constraints.gas.allowed
     roc_m: tuple[float, ...] | None = None            # None -> Constraints.mirrors.allowed_roc_m
     diameters_inch: tuple[float, ...] | None = None   # None -> Constraints.mirrors.allowed_diameters_inch
-    coatings: tuple[str, ...] | None = None           # None -> Constraints.mirrors.allowed_coatings
+    coatings: Sequence[str] | None = None             # None -> Constraints.mirrors.allowed_coatings
     branches: tuple[Literal["concentric", "planar"], ...] = ("concentric", "planar")
     round_trips: tuple[int, int] = (3, 40)            # inclusive range of M (one re-entrant cycle)
     k_range: tuple[int, int] | None = None            # None -> every k < M/2 coprime with M

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field, replace
+from typing import Any, cast
 
 import numpy as np
 
@@ -83,8 +84,8 @@ class DesignMap:
     tightest: np.ndarray                  # (ny, nx) str: smallest-margin limit (all points)
     margin: np.ndarray                    # (ny, nx) margin of `tightest` (negative = violated)
     values: dict                          # metric -> (ny, nx) array (duration_fs, throughput, ...)
-    candidates: np.ndarray = field(repr=False, default=None)   # (ny, nx) Candidate or None
-    problem: object = field(repr=False, default=None)
+    candidates: Any = field(repr=False, default=None)   # (ny, nx) array of Candidate or None
+    problem: Any = field(repr=False, default=None)
     solver: str = "analytic"
 
     @property
@@ -122,7 +123,7 @@ class DesignMap:
         if ax is None:
             _, ax = plt.subplots(figsize=(8, 5.5))
         names = sorted(n for n in set(self.limiting.ravel()) if n and n != "feasible")
-        extra = iter(plt.get_cmap("tab20b").colors)
+        extra = iter(list(cast(Any, plt.get_cmap("tab20b")).colors))
         colors = [CONSTRAINT_COLORS.get(n) or next(extra) for n in names]
         cmap = ListedColormap(["white", "#dddddd", *(colors or ["white"])])
         code = np.zeros(self.limiting.shape)
@@ -197,7 +198,7 @@ def design_map(problem, *, gas, roc_m, k=1, round_trips=None, branch="concentric
     if "round_trips" not in (x[0], y[0]) and round_trips is None:
         raise ValueError("design_map: give round_trips=M (the number of round trips of the cell) when "
                          "round_trips is not one of the two scanned axes")
-    base = {"gas": gas, "pressure_bar": 0.1, "roc_m": roc_m, "round_trips": round_trips or 10,
+    base: dict[str, Any] = {"gas": gas, "pressure_bar": 0.1, "roc_m": roc_m, "round_trips": round_trips or 10,
             "k": 1 if k == "smallest" else k, "branch": branch, "coating": coat, "diameter_inch": dia}
 
     tasks, where = [], []
@@ -256,9 +257,10 @@ def design_map(problem, *, gas, roc_m, k=1, round_trips=None, branch="concentric
         violated = {n: s for n, s in hard.items() if s < 0}
         physical = {n: v for n, v in violated.items() if n != "simulation"}
         # a physical limit when one is crossed; "simulation" only when the model broke down alone
-        limiting[i, j] = min(physical or violated, key=(physical or violated).get) if violated else "feasible"
+        worst = physical or violated
+        limiting[i, j] = min(worst, key=lambda n: worst[n]) if violated else "feasible"
         if c.slacks:
-            name = min(c.slacks, key=c.slacks.get)
+            name = min(c.slacks, key=lambda n: c.slacks[n])
             tightest[i, j], margin[i, j] = name, c.slacks[name]
         for key in keys:
             v = c.score if key == "score" else c.metrics.get(key, np.nan)

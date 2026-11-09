@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 from scipy.constants import c as C0
@@ -69,10 +69,10 @@ class Coating:
     # ------------------------------------------------------------ evaluation
     def R(self, lam_nm):
         lam_nm = np.asarray(lam_nm, dtype=float)
-        if np.isscalar(self.reflectivity) or np.ndim(self.reflectivity) == 0:
-            r = np.full_like(lam_nm, float(self.reflectivity))
+        if np.ndim(self.reflectivity) == 0:
+            r = np.full_like(lam_nm, float(cast(float, self.reflectivity)))
         else:
-            x, y = self.reflectivity
+            x, y = cast(tuple, self.reflectivity)
             r = np.interp(lam_nm, x, y)
         if self.r_in_percent:
             r = r / 100.0
@@ -80,9 +80,9 @@ class Coating:
 
     def gdd(self, lam_nm):
         lam_nm = np.asarray(lam_nm, dtype=float)
-        if np.isscalar(self.gdd_fs2) or np.ndim(self.gdd_fs2) == 0:
-            return np.full_like(lam_nm, float(self.gdd_fs2))
-        x, y = self.gdd_fs2
+        if np.ndim(self.gdd_fs2) == 0:
+            return np.full_like(lam_nm, float(cast(float, self.gdd_fs2)))
+        x, y = cast(tuple, self.gdd_fs2)
         return np.interp(lam_nm, x, y)
 
     def in_band(self, lam_nm):
@@ -111,9 +111,9 @@ class Coating:
         if self._phase_cache is None or self._phase_cache[0] != lambda0_m:
             if np.ndim(self.gdd_fs2) == 0:
                 wg = np.linspace(w0 * 0.5, w0 * 1.5, 4001)
-                g = np.full_like(wg, float(self.gdd_fs2))
+                g = np.full_like(wg, float(cast(float, self.gdd_fs2)))
             else:
-                x, y = self.gdd_fs2
+                x, y = cast(tuple, self.gdd_fs2)
                 wg = 2 * np.pi * C0 / (np.asarray(x) * 1e-9) * 1e-15
                 i = np.argsort(wg)
                 wg, g = wg[i], np.asarray(y, dtype=float)[i]

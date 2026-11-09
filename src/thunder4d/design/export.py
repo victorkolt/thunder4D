@@ -13,6 +13,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from math import log
+from typing import Any
 
 import numpy as np
 
@@ -153,9 +154,10 @@ class Validation4D:
     cfg: dict
     rows: list                      # (quantity, fast1d, 4D, relative difference)
     extra: dict                     # 4D-only results (M2, HG00, ...)
-    built: object = field(repr=False, default=None)
-    fast1d: object = field(repr=False, default=None)
+    built: Any = field(repr=False, default=None)      # the built 4D simulation (thunder4d.inputfile.Built)
+    fast1d: Any = field(repr=False, default=None)     # the fast1d MPCOutput
     runtime_s: float = 0.0
+    comp: dict = field(repr=False, default_factory=dict)   # 4D compression analysis (pulse, GDD, FWHM)
 
     def summary(self):
         g = self.built.grid
@@ -182,7 +184,7 @@ class Validation4D:
         ax[0].set(xlabel="wavelength (nm)", ylabel="spectrum (norm.)", yscale="log", ylim=(1e-4, 1.5),
                   xlim=(g["lambda_min_nm"], g["lambda_max_nm"]))
         ax[0].legend()
-        c = self._comp
+        c = self.comp
         t1 = self.fast1d.t_compressed * 1e15
         p1 = np.abs(self.fast1d.field_compressed) ** 2
         ax[1].plot(t1 - t1[np.argmax(p1)], p1 / p1.max(), label=f"fast1d {self.fast1d.fwhm_compressed * 1e15:.1f} fs")
@@ -238,8 +240,7 @@ def validate_4d(problem, cand, *, quick=None, preset="coarse", verbose=True, max
     extra = {"M2 (x, mean)": float(h["M2x_mean"][-1]), "M2 (y, mean)": float(h["M2y_mean"][-1]),
              "HG00 fraction": float(h["eta00_total"][-1]),
              "peak / FTL peak (4D)": comp["peak_power"] / comp["peak_power_TL"]}
-    v = Validation4D(cfg, rows, extra, b, ref, time.time() - t0)
-    v._comp = comp
+    v = Validation4D(cfg, rows, extra, b, ref, time.time() - t0, comp)
     if verbose:
         print(v.summary())
     return v

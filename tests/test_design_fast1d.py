@@ -100,6 +100,8 @@ def test_adapter_quick_result_feeds_evaluate():
     prob = problem()
     cand = Candidate("Ar", 0.6, 1.0, 10, 3)
     res = Fast1DQuick()(prob, cand)
+    assert res.mirror_fluence_J_cm2 is not None and res.duration_per_bounce_fs is not None
+    assert res.main_peak_fraction is not None
     assert len(res.mirror_fluence_J_cm2) == 20            # one bounce per pass
     assert len(res.duration_per_bounce_fs) == 20
     assert 0 < res.main_peak_fraction <= 1
@@ -111,6 +113,7 @@ def test_adapter_prechirp_lengthens_the_input():
     prob = problem()
     cand = Candidate("Ar", 0.6, 1.0, 10, 3, prechirp_gdd_fs2=50000.0)
     inp = Fast1DQuick().build_input(prob, cand)
+    assert inp.field is not None
     t, a = inp.field
     assert fast1d.fwhm(t, np.abs(a) ** 2) > 1.5 * 190e-15
 

@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, replace
 from math import gcd
-from typing import Protocol
+from typing import Protocol, cast
 
 import numpy as np
 from scipy.optimize import minimize
@@ -129,7 +129,7 @@ class Candidate:
         if tabulated:
             kw.setdefault("mirror_phase", lambda lam: c.phase(lam, lambda0_m))
         else:
-            kw.setdefault("mirror_gdd_fs2", float(c.gdd_fs2))
+            kw.setdefault("mirror_gdd_fs2", float(cast(float, c.gdd_fs2)))
         return MPC.herriott(self.roc_m, 2 * self.round_trips, self.k, self.material(polarization_factor),
                             n_passes=self.n_passes,
                             branch=self.branch, **kw)
@@ -234,7 +234,7 @@ class QuickResult:
 
 
 class QuickSolver(Protocol):
-    def __call__(self, problem: DesignProblem, candidate: Candidate) -> QuickResult: ...
+    def __call__(self, problem: DesignProblem, cand: Candidate, /) -> QuickResult: ...
 
 
 def _names(x):
@@ -706,7 +706,10 @@ class MPCDesigner:
 
     # -------------------------------------------------------- internals
     def _evaluate(self, cand):
-        return evaluate(self.problem, cand, self.quick(self.problem, cand).as_metrics())
+        quick = self.quick
+        if quick is None:
+            raise ValueError("this needs a QuickSolver (your 1+1D code adapter)")
+        return evaluate(self.problem, cand, quick(self.problem, cand).as_metrics())
 
     def _neighbours(self, c):
         """Same geometry with N +- neighbour_n_passes (within [min_passes, 2 M]), and the same (M, k)
