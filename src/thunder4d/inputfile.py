@@ -104,6 +104,129 @@ REQUIRED = [("laser", "energy_J"), ("laser", "duration_fs"), ("medium", "gas"), 
 FREE_FORM = ("design", "notes")
 
 
+# ============================================================ field descriptions
+@dataclass(frozen=True)
+class Field:
+    """How one key of the input file is shown and edited (GUI forms, documentation).
+
+    The file stores values in the unit of the key name; the form shows them in `unit`, with
+    shown value = file value / scale (e.g. energy_J shown in mJ: scale = 1e-3).
+
+    kind: float | int | bool | choice | text | multiline | table | float_or_table | info | hidden
+          table: {column: [...]} with the keys `columns` (the first one is the wavelength);
+          float_or_table: a scalar, or a table as above; info: shown, not edited (design provenance);
+          hidden: kept as is, not shown.
+    optional: None is allowed and means `none_text` (e.g. "from the preset"); required keys are in REQUIRED.
+    show_if: (path, values): shown only when the key at `path` has one of `values`.
+    """
+    label: str
+    kind: str = "float"
+    unit: str = ""
+    scale: float = 1.0
+    choices: tuple = ()
+    columns: tuple[str, ...] = ()
+    optional: bool = False
+    none_text: str = ""
+    help: str = ""
+    show_if: tuple[str, tuple] | None = None
+    advanced: bool = False
+
+
+# Sections of the input, in display order ("general" = the top-level keys).
+BLOCKS = {"general": "General", "laser": "Laser", "beam": "Beam injection", "medium": "Gas", "cell": "Cell",
+          "mirrors": "Mirrors", "grid": "Grid", "solver": "Solver", "run": "Run"}
+
+
+def _gases():
+    from .materials import SELLMEIER
+    return tuple(SELLMEIER)
+
+
+# Every key of DEFAULTS is described here (tests/test_inputfile.py checks it): a new key of the input file
+# gets its Field in the same change, and the GUI builder shows it with no other edit.
+FIELDS: dict[str, Field] = {
+    "schema": Field("Schema", "hidden"),
+    "version": Field("Schema version", "hidden"),
+    "name": Field("Name", "text", help="Name of the simulation (used for the output files)."),
+    "notes": Field("Notes", "multiline", help="Free text."),
+    "design": Field("Design provenance", "hidden"),
+    # laser
+    "laser.energy_J": Field("Pulse energy", unit="mJ", scale=1e-3),
+    "laser.duration_fs": Field("Duration (FWHM)", unit="fs", help="Transform-limited FWHM of the intensity."),
+    "laser.wavelength_nm": Field("Central wavelength", unit="nm"),
+    "laser.shape": Field("Spectrum", "choice", choices=("gaussian", "measured"),
+                         help="gaussian: from the duration; measured: the table below."),
+    "laser.spectrum": Field("Measured spectrum", "table", columns=("wavelength_nm", "intensity", "phase_rad"),
+                            show_if=("laser.shape", ("measured",)),
+                            help="Intensity per wavelength; the phase column [rad] is optional."),
+    "laser.gdd_fs2": Field("Input GDD", unit="fs²", help="Spectral phase added to the input pulse."),
+    "laser.tod_fs3": Field("Input TOD", unit="fs³"),
+    # beam
+    "beam.injection": Field("Injected beam", "choice", choices=("linear", "nonlinear", "waist"),
+                            help="linear: eigenmode of the empty cell; nonlinear: Kerr-matched eigenmode; "
+                                 "waist: the waist below."),
+    "beam.w0_m": Field("Waist at the centre", unit="µm", scale=1e-6, optional=True,
+                       show_if=("beam.injection", ("waist",))),
+    # medium
+    "medium.gas": Field("Gas", "choice", choices=_gases()),
+    "medium.pressure_bar": Field("Pressure", unit="bar"),
+    "medium.temperature_K": Field("Temperature", unit="K"),
+    "medium.n2_1bar": Field("n₂ at 1 bar", unit="m²/W", optional=True, none_text="from the gas table",
+                            help="Kerr index at 1 bar and room temperature."),
+    # cell
+    "cell.roc_m": Field("Mirror radius of curvature", unit="m"),
+    "cell.separation_m": Field("Mirror separation", unit="m"),
+    "cell.n_passes": Field("Number of passes", "int", help="One pass = transit over the separation + bounce."),
+    "cell.herriott": Field("Herriott pattern", "info", optional=True),
+    # mirrors
+    "mirrors.reflectivity": Field("Reflectivity", "float_or_table", columns=("wavelength_nm", "value"),
+                                  help="Per bounce: a constant, or a table versus wavelength."),
+    "mirrors.gdd_fs2": Field("GDD per bounce", "float_or_table", unit="fs²", columns=("wavelength_nm", "value")),
+    "mirrors.tod_fs3": Field("TOD per bounce", unit="fs³"),
+    "mirrors.diameter_m": Field("Clear aperture", unit="mm", scale=1e-3, optional=True, none_text="infinite"),
+    "mirrors.coating": Field("Coating", "info", optional=True),
+    # grid
+    "grid.preset": Field("Resolution", "choice", choices=tuple(GRID_PRESETS),
+                         help="coarse: minutes; fine: benchmark grade. The values below override it."),
+    "grid.lambda_min_nm": Field("Shortest wavelength", unit="nm"),
+    "grid.lambda_max_nm": Field("Longest wavelength", unit="nm"),
+    "grid.box_factor": Field("Box / waist", optional=True, none_text="from the preset", advanced=True),
+    "grid.points_per_waist": Field("Points per waist", optional=True, none_text="from the preset", advanced=True),
+    "grid.time_window_factor": Field("Time window / duration", optional=True, none_text="from the preset",
+                                     advanced=True),
+    "grid.precision": Field("Precision", "choice", choices=("single", "double"), advanced=True),
+    "grid.device": Field("Device", "choice", choices=("auto", "cpu", "gpu"), advanced=True),
+    # solver
+    "solver.phi_max": Field("Max nonlinear phase per step", unit="rad", advanced=True),
+    "solver.gouy_step": Field("Max Gouy phase per step", unit="rad", advanced=True),
+    "solver.self_steepening": Field("Self-steepening", "bool", advanced=True),
+    # run
+    "run.record_every": Field("Record every", "int", unit="passes", advanced=True),
+    "run.near_field": Field("Near-field diagnostics", "bool", advanced=True,
+                            help="Angle-resolved spectrogram and near-field profiles (some seconds per record)."),
+    "run.record_mirror": Field("Fluence on the mirrors", "bool", advanced=True),
+}
+
+
+def field_paths(defaults=DEFAULTS):
+    """Every editable key of the input, as 'block.key' (or 'key' at the top level), in file order."""
+    for key, val in defaults.items():
+        if isinstance(val, dict) and key not in FREE_FORM:
+            yield from (f"{key}.{sub}" for sub in val)
+        else:
+            yield key
+
+
+def get_path(cfg, path):
+    *block, key = path.split(".")
+    return (cfg[block[0]] if block else cfg).get(key)
+
+
+def set_path(cfg, path, value):
+    *block, key = path.split(".")
+    (cfg[block[0]] if block else cfg)[key] = value
+
+
 # ============================================================ dict helpers
 def default_input(**blocks):
     """A complete input with defaults; keyword blocks are merged in, e.g.
@@ -137,37 +260,43 @@ def _jsonable(v):
     return v
 
 
-def check_input(cfg):
-    """Raise ValueError listing every problem of a (merged) input."""
+def input_problems(cfg):
+    """Every problem of a (merged) input, as (path of the key at fault, message); [] if it is valid."""
     errors = []
     if cfg.get("schema") != SCHEMA:
-        errors.append(f"schema must be {SCHEMA!r}")
+        errors.append(("schema", f"schema must be {SCHEMA!r}"))
     if cfg.get("version", 0) > SCHEMA_VERSION:
-        errors.append(f"file version {cfg['version']} is newer than this thunder4d ({SCHEMA_VERSION})")
+        errors.append(("version", f"file version {cfg['version']} is newer than this thunder4d ({SCHEMA_VERSION})"))
     for block, key in REQUIRED:
         if cfg[block].get(key) is None:
-            errors.append(f"{block}.{key} is required")
+            errors.append((f"{block}.{key}", f"{block}.{key} is required"))
     c = cfg["cell"]
     if c["roc_m"] and c["separation_m"] and not 0 < c["separation_m"] < 2 * c["roc_m"]:
-        errors.append("cell: unstable, need 0 < separation_m < 2 roc_m")
+        errors.append(("cell.separation_m", "cell: unstable, need 0 < separation_m < 2 roc_m"))
     if c["n_passes"] is not None and int(c["n_passes"]) < 1:
-        errors.append("cell.n_passes must be >= 1")
+        errors.append(("cell.n_passes", "cell.n_passes must be >= 1"))
     g = cfg["grid"]
     if g["preset"] not in GRID_PRESETS:
-        errors.append(f"grid.preset must be one of {sorted(GRID_PRESETS)}")
+        errors.append(("grid.preset", f"grid.preset must be one of {sorted(GRID_PRESETS)}"))
     lam0 = cfg["laser"]["wavelength_nm"]
     if g["lambda_min_nm"] and g["lambda_max_nm"] and not g["lambda_min_nm"] < lam0 < g["lambda_max_nm"]:
-        errors.append("grid: need lambda_min_nm < laser.wavelength_nm < lambda_max_nm")
+        errors.append(("grid.lambda_min_nm", "grid: need lambda_min_nm < laser.wavelength_nm < lambda_max_nm"))
     if cfg["laser"]["shape"] == "measured" and not cfg["laser"]["spectrum"]:
-        errors.append("laser.shape = 'measured' needs laser.spectrum")
+        errors.append(("laser.spectrum", "laser.shape = 'measured' needs laser.spectrum"))
     if cfg["beam"]["injection"] not in ("linear", "nonlinear", "waist"):
-        errors.append("beam.injection must be 'linear', 'nonlinear' or 'waist'")
+        errors.append(("beam.injection", "beam.injection must be 'linear', 'nonlinear' or 'waist'"))
     if cfg["beam"]["injection"] == "waist" and not cfg["beam"]["w0_m"]:
-        errors.append("beam.injection = 'waist' needs beam.w0_m")
+        errors.append(("beam.w0_m", "beam.injection = 'waist' needs beam.w0_m"))
     for key in ("reflectivity", "gdd_fs2"):
         t = cfg["mirrors"][key]
         if isinstance(t, dict) and not {"wavelength_nm", "value"} <= set(t):
-            errors.append(f"mirrors.{key}: a table needs 'wavelength_nm' and 'value'")
+            errors.append((f"mirrors.{key}", f"mirrors.{key}: a table needs 'wavelength_nm' and 'value'"))
+    return errors
+
+
+def check_input(cfg):
+    """Raise ValueError listing every problem of a (merged) input."""
+    errors = [msg for _, msg in input_problems(cfg)]
     if errors:
         raise ValueError("invalid THUNDER4D input:\n  - " + "\n  - ".join(errors))
     return cfg
@@ -289,6 +418,31 @@ def make_pulse(cfg, grid, cell):
     elif beam["injection"] == "waist":
         w0 = float(beam["w0_m"])
     return Pulse.at_focus(grid, E, Beam(gaussian(at_grid(w0)), chromatic_size="eigenmode"), las["energy_J"]), w0
+
+
+def describe_input(cfg):
+    """Quick checks of an input before launching it (milliseconds: neither the pulse nor the solver is built).
+
+    Returns the linear eigenmode, the grid size and the Gaussian estimates of the peak power (versus the
+    critical power of self-focusing) and of the peak fluence on the mirrors (linear mode)."""
+    cfg = load_input(cfg)
+    cell = make_cell(cfg)
+    las = cfg["laser"]
+    lam0 = las["wavelength_nm"] * 1e-9
+    mode = cell.linear_mode(lam0)
+    sizing = copy.deepcopy(cfg)
+    sizing["grid"]["device"] = "cpu"                     # sizing only: never allocates on the GPU
+    grid = make_grid(sizing, cell)
+    tl = las["duration_fs"] * 1e-15
+    stretch = np.sqrt(1 + (4 * np.log(2) * (las["gdd_fs2"] or 0.0) * 1e-30 / tl ** 2) ** 2)
+    peak_power = 2 * np.sqrt(np.log(2) / np.pi) * las["energy_J"] / (tl * stretch)     # Gaussian, 0.94 E / tau
+    critical = float(cell.medium.critical_power(lam0))
+    n_bytes = np.prod(grid.shape) * grid.dtype.itemsize
+    return {"w0_m": float(mode["w0"]), "w_mirror_m": float(mode["w_mirror"]), "zR_m": float(mode["zR"]),
+            "gouy_per_pass_rad": float(mode["gouy_per_pass"]), "path_length_m": cell.d * cell.n_passes,
+            "peak_power_W": float(peak_power), "critical_power_W": critical, "p_over_pcr": float(peak_power / critical),
+            "mirror_fluence_J_cm2": float(2 * las["energy_J"] / (np.pi * mode["w_mirror"] ** 2) * 1e-4),
+            "grid_shape": (grid.Nx, grid.Ny, grid.Nt), "field_MB": float(n_bytes / 1e6), "grid": grid.describe()}
 
 
 @dataclass

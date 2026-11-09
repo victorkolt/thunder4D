@@ -15,6 +15,8 @@ uv run --extra examples --with jupyter jupyter lab    # tutorial and benchmark n
 The package lives in `src/thunder4d/`. Add `--extra gpu` for CuPy.
 The graphical interface (`src/thunder4d/gui/`) starts with `uv run thunder4d-gui [input.json]`; PySide6 is in the dev group.
 To add a panel, a results plot or a live metric, register it in `thunder4d.gui.registry` (see its docstring).
+A new key of the input file needs its `Field` in `thunder4d.inputfile.FIELDS` (a test checks it): the simulation builder then
+shows it with no other change. A new kind of field needs an editor in `thunder4d.gui.fields.EDITORS`.
 
 ## Tests
 

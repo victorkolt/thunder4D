@@ -7,6 +7,7 @@ from any module. See registry.py to add a panel, a results plot or a live metric
 """
 from __future__ import annotations
 
+import importlib
 import sys
 
 from .registry import METRICS, PANELS, PLOTS, MetricSpec, PanelSpec, PlotSpec, Registry, available_plots
@@ -15,7 +16,7 @@ from .registry import METRICS, PANELS, PLOTS, MetricSpec, PanelSpec, PlotSpec, R
 def main(argv: list[str] | None = None) -> int:
     """Entry point of the thunder4d-gui command."""
     try:
-        from . import _qt  # PySide6 installed?
+        importlib.import_module("thunder4d.gui._qt")     # PySide6 installed? (re-imported if it failed before)
     except ImportError as err:
         print(f"thunder4d-gui: {err}", file=sys.stderr)
         return 1
