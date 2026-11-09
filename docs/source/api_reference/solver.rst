@@ -7,7 +7,7 @@ UPPE propagator on a fixed grid (standard, non-paraxial). See :doc:`../overview/
 the equation and the scheme, and :class:`~thunder4d.lensframe.LensFrameSolver` for the
 beam-following solver.
 
-.. py:class:: UPPESolver(grid, medium, *, phi_max=0.02, dz_max=None, paraxial=False, self_steepening=True, absorber_frac=0.9, absorber_order=16, cache_size=4)
+.. py:class:: UPPESolver(grid, medium, *, phi_max=0.02, dz_max=None, paraxial=False, self_steepening=True, absorber_frac=0.9, absorber_order=16, cache_size=4, kernels="auto")
 
    :param float phi_max: maximum peak nonlinear phase per step [rad]; controls accuracy
    :param float dz_max: maximum step [m] (default: a quarter of each propagated segment)
@@ -19,9 +19,13 @@ beam-following solver.
    :param int absorber_order: super-Gaussian order of the absorbers
    :param int cache_size: number of linear propagators :math:`e^{iDh}` kept in memory
       (each is one full field array)
+   :param str kernels: array operations between the FFTs on the CPU: ``"auto"`` (Numba if
+      installed, else NumPy; always NumPy/CuPy on the GPU), ``"numba"`` or ``"numpy"``
+      (see :ref:`numba-kernels`)
 
    **State:** ``B`` (accumulated on-axis peak B-integral [rad]), ``nsteps``, ``z``
-   (propagated distance [m]), ``k0``, ``k1``, ``n2``, ``D`` (linear operator), ``igamma``.
+   (propagated distance [m]), ``k0``, ``k1``, ``n2``, ``D`` (linear operator), ``igamma``,
+   ``kernels`` (``"numba"`` or ``"numpy"``, as resolved).
 
    .. py:method:: propagate(Aw, L)
 

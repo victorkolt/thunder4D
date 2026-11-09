@@ -10,7 +10,10 @@ Requirements
   ``numpy.fft`` for the 2D transforms and can use several cores
 - Matplotlib (optional: the example scripts and the plots of the design helper)
 
-No GPU and no compiled extension are needed. For an NVIDIA GPU, install CuPy
+No GPU and no compiled extension are needed. On the CPU, installing Numba
+(``uv pip install numba``) makes the 4D solvers use fused multithreaded kernels for the
+array operations between the FFTs (see :ref:`numba-kernels`), and pyFFTW makes the FFTs
+themselves faster with ``fft_backend="fftw"`` (see :ref:`fftw-backend`). For an NVIDIA GPU, install CuPy
 (``uv pip install cupy-cuda12x``; RTX 50-series cards need CUDA 12.8 or newer): grids created with
 ``device="auto"`` (the default) then run on the GPU, see :func:`thunder4d.gpu_available`.
 
@@ -24,6 +27,8 @@ The commands use `uv <https://docs.astral.sh/uv/>`_. In a uv project:
    uv add thunder4d                 # numpy + scipy
    uv add "thunder4d[examples]"     # + matplotlib, for the examples and the plots
    uv add "thunder4d[gpu]"          # + CuPy, for an NVIDIA GPU
+   uv add "thunder4d[numba]"        # + Numba, faster CPU runs
+   uv add "thunder4d[fftw]"         # + pyFFTW, FFTW transforms on the CPU (fft_backend="fftw")
 
 In an existing environment (venv, conda), use ``uv pip install`` with the same arguments.
 
@@ -70,6 +75,7 @@ Repository layout
    │   ├── pulse.py           spectra, profiles, aberrations, STCs, Beam, Pulse
    │   ├── cell.py            MPC (geometry, eigenmode, nonlinear matching, mirrors)
    │   ├── solver.py          UPPESolver
+   │   ├── kernels.py         CPU kernel choice (Numba / NumPy); _numba_kernels.py: the kernels
    │   ├── simulation.py      MPCSimulation (pass loop, recording, checkpoints, saving)
    │   ├── lensframe.py       lens frame: LensFrameSimulation, LensFrameSolver, suggest_lens_grid
    │   └── diagnostics.py     analysis functions

@@ -42,9 +42,10 @@ field is listed in one error message.
    * - ``grid``
      - preset (``"coarse"`` | ``"medium"`` | ``"fine"``), box_factor, points_per_waist,
        time_window_factor (override the preset), **lambda_min_nm**, **lambda_max_nm**,
-       precision (``"single"`` | ``"double"``), device (``"auto"`` | ``"cpu"`` | ``"gpu"``)
+       precision (``"single"`` | ``"double"``), device (``"auto"`` | ``"cpu"`` | ``"gpu"``),
+       fft_backend (``"auto"`` | ``"scipy"`` | ``"fftw"``)
    * - ``solver``
-     - phi_max, gouy_step, self_steepening
+     - phi_max, gouy_step, self_steepening, kernels (``"auto"`` | ``"numba"`` | ``"numpy"``)
    * - ``run``
      - record_every, near_field, record_mirror
    * - ``design``

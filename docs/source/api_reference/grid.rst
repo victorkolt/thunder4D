@@ -27,9 +27,9 @@ Grid
    :param str device: ``"auto"`` (GPU if CuPy and a CUDA device work, else CPU), ``"cpu"`` or
       ``"gpu"`` (raises if no GPU is usable). The field, propagators and mirror transfer function live
       on that device (``grid.device``, ``grid.xp``); axes such as ``grid.x`` and ``grid.lam`` stay NumPy.
-   :param str fft_backend: ``"auto"`` (same as ``"scipy"``), ``"scipy"`` or
-      ``"numpy"``
-   :param int workers: threads for the SciPy backend (default: all cores)
+   :param str fft_backend: ``"auto"`` (same as ``"scipy"``), ``"scipy"``, ``"numpy"`` or
+      ``"fftw"`` (pyFFTW, CPU only; see :ref:`fftw-backend`)
+   :param int workers: threads for the SciPy and FFTW backends (default: all cores)
 
    **Attributes**
 
@@ -90,9 +90,14 @@ Grid
 FFT
 ---
 
-.. py:class:: FFT(backend="auto", workers=None)
+.. py:class:: FFT(backend="auto", workers=None, device="cpu")
 
-   Thin wrapper applying the conventions of :doc:`../overview/conventions`.
+   Thin wrapper applying the conventions of :doc:`../overview/conventions`. With
+   ``backend="fftw"``, 3D complex arrays (the solvers' fields) use planned FFTW transforms, one plan
+   per shape, dtype and transform, made on first use with the effort ``FFT.fftw_effort``
+   (``"FFTW_MEASURE"`` by default; ``"FFTW_ESTIMATE"`` plans instantly, ``"FFTW_PATIENT"`` searches
+   longer); every other array goes to ``scipy.fft``. Each call returns a new array and leaves its
+   input unchanged, as with SciPy.
 
    .. py:method:: fft2(a)
 
@@ -136,8 +141,8 @@ suggest_grid
       higher-order content is much wider than the fundamental mode.
 
 
-GPU helpers
------------
+GPU and CPU helpers
+-------------------
 
 .. py:function:: gpu_available()
 
@@ -148,3 +153,12 @@ GPU helpers
    NumPy array from an array that may live on the GPU (no copy for NumPy input). The field
    ``sim.Aw`` and ``Pulse.Aw`` are device arrays on a GPU grid; the diagnostics accept either and
    always return NumPy arrays (they copy the field to the host once per call).
+
+.. py:function:: thunder4d.kernels.numba_available()
+
+   ``True`` if Numba is installed: the 4D solvers then use the fused CPU kernels by default
+   (see :ref:`numba-kernels`).
+
+.. py:function:: fftw_available()
+
+   ``True`` if pyFFTW is installed (``fft_backend="fftw"`` usable). In ``thunder4d.grid``.

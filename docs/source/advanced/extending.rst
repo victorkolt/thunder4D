@@ -10,7 +10,9 @@ already used for the Kerr term. :class:`~thunder4d.lensframe.LensFrameSolver` in
 ``nonlinear`` from :class:`~thunder4d.solver.UPPESolver`, so the same override works in both
 solvers. In the lens frame the field is :math:`B`, and :math:`|B|^2` is the physical intensity
 times :math:`s^2`: a term that depends on the intensity other than through the Kerr form must
-include that factor (and :math:`d z = s^2 d\zeta`).
+include that factor (and :math:`d z = s^2 d\zeta`). With an overridden ``nonlinear``, the RK4
+calls it at every stage as usual: the fused Numba RK4 (:ref:`numba-kernels`) is only used with
+the built-in Kerr term.
 
 .. code-block:: python
 

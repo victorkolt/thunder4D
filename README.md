@@ -11,7 +11,7 @@ Full documentation: `https://victorkolt.github.io/thunder4D/`.
 - time-dependent nonlinear mode mismatch,
 - influence of space-time couplings (spatial chirp, pulse-front tilt, …) on the output.
 
-The code is pure Python. NumPy (≥ 2.0) and SciPy (≥ 1.10) are required; `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. An NVIDIA GPU is optional: with CuPy installed (`uv pip install cupy-cuda12x`), `suggest_lens_grid(..., device="auto")` (the default) runs the propagation on the GPU, and `device="cpu"` / `"gpu"` force one or the other. `thunder4d.gpu_available()` tells you whether CuPy works; `thunder4d.to_host(array)` converts a device array to NumPy. Everything returned by `thunder4d.diagnostics` is a NumPy array on either device.
+The code is pure Python. NumPy (≥ 2.0) and SciPy (≥ 1.10) are required; `scipy.fft` is about 8× faster than `numpy.fft` for the 2D transforms. Matplotlib is only needed for the examples. An NVIDIA GPU is optional: with CuPy installed (`uv pip install cupy-cuda12x`), `suggest_lens_grid(..., device="auto")` (the default) runs the propagation on the GPU, and `device="cpu"` / `"gpu"` force one or the other. On the CPU, installing Numba (`uv pip install "thunder4d[numba]"`) makes both 4D solvers use fused, multithreaded kernels for the array operations between the FFTs (`kernels="auto"`, the default; `"numpy"` to switch them off), and with pyFFTW (`uv pip install "thunder4d[fftw]"`) `fft_backend="fftw"` on the grid runs the solvers' FFTs with FFTW. `thunder4d.gpu_available()` tells you whether CuPy works; `thunder4d.to_host(array)` converts a device array to NumPy. Everything returned by `thunder4d.diagnostics` is a NumPy array on either device.
 
 ## Quick start
 

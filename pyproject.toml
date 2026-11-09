@@ -23,15 +23,18 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=2.0",
+    "pyfftw>=0.15.0",
     "scipy>=1.10",
 ]
 
 [project.optional-dependencies]
 examples = ["matplotlib"]
 gpu = ["cupy-cuda12x"]
+numba = ["numba>=0.61"]   # fused multithreaded CPU kernels for the 4D solvers
+fftw = ["pyfftw>=0.14"]   # planned FFTW transforms on the CPU (fft_backend="fftw")
 
 [dependency-groups]
-dev = ["matplotlib>=3.10.9", "pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.95"]   # matplotlib: plots (type-checked in CI)
+dev = ["matplotlib>=3.10.9", "numba>=0.61", "pyfftw>=0.14", "pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.95"]   # matplotlib: plots (type-checked in CI); numba, pyfftw: CI tests the CPU options
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]

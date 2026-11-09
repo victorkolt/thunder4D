@@ -9,7 +9,7 @@ has to hold the beam at the waist scale. See :doc:`../overview/lens_frame` for t
 LensFrameSimulation
 -------------------
 
-.. py:class:: LensFrameSimulation(pulse, cell, *, phi_max=0.02, gouy_step=0.05, **kw)
+.. py:class:: LensFrameSimulation(pulse, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True, kernels="auto", **kw)
 
    :class:`~thunder4d.simulation.MPCSimulation` running on a
    :class:`LensFrameSolver`. It accepts every keyword argument of ``MPCSimulation``
@@ -24,6 +24,8 @@ LensFrameSimulation
    :param float phi_max: maximum peak nonlinear phase per step [rad]
    :param float gouy_step: maximum Gouy phase per step [rad] (step in :math:`\zeta` at most
       ``gouy_step`` × :math:`z_R`)
+   :param str kernels: ``"auto"`` | ``"numba"`` | ``"numpy"``, see
+      :class:`~thunder4d.solver.UPPESolver`
 
    .. py:attribute:: mirror_scale
 
@@ -35,7 +37,7 @@ LensFrameSimulation
 LensFrameSolver
 ---------------
 
-.. py:class:: LensFrameSolver(grid, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True, absorber_frac=0.9, absorber_order=16)
+.. py:class:: LensFrameSolver(grid, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True, absorber_frac=0.9, absorber_order=16, kernels="auto")
 
    Split-step solver in :math:`\zeta`: diffraction + dispersion (half steps, merged), harmonic
    potential, Kerr (RK4). Subclass of :class:`~thunder4d.solver.UPPESolver`, from which it
@@ -44,7 +46,7 @@ LensFrameSolver
 
    **State:** ``B`` (accumulated on-axis peak B-integral [rad]), ``nsteps``, ``z`` (physical
    distance propagated [m]), ``zR``, ``zeta_m`` (:math:`\zeta` at the mirror), ``s_m``,
-   ``h_max`` (= ``gouy_step`` × ``zR``), ``k0``, ``k1``, ``n2``.
+   ``h_max`` (= ``gouy_step`` × ``zR``), ``k0``, ``k1``, ``n2``, ``kernels``.
 
    .. py:method:: propagate_zeta(Bw, zeta_a, zeta_b)
 
