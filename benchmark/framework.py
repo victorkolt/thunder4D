@@ -39,6 +39,8 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
+from thunder4d.inputfile import _jsonable  # numpy values -> JSON
+
 SCHEMA_VERSION = 1
 FS = 1e-15
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -265,28 +267,12 @@ def _git_commit():
         return None
 
 
-def _jsonable(v):
-    if isinstance(v, (np.floating, np.integer)):
-        return v.item()
-    if isinstance(v, (tuple, list)):
-        return [_jsonable(x) for x in v]
-    if isinstance(v, dict):
-        return {k: _jsonable(x) for k, x in v.items()}
-    return v
-
-
 # ====================================================================== simulation
-def _simulation_class():
-    import thunder4d as th
-
-    class BenchSimulation(th.LensFrameSimulation):
-        """LensFrameSimulation that also records the exact peak intensity at the cell centre."""
-
-        def record(self, p, mirror_fluence=None, mirror_profiles=None):
-            super().record(p, mirror_fluence, mirror_profiles)
-            self.history.setdefault("I_peak", []).append(self.solver.peak_intensity(self.Aw))
-
-    return BenchSimulation
+def _peak_intensity(h):
+    """Exact peak intensity at the cell centre [W/m^2] per record (history["peak_intensity"]). Checkpoints
+    written before thunder4d recorded it hold the first values as "I_peak" (former benchmark subclass)."""
+    old = h.get("I_peak", [])
+    return np.array([old[i] if v is None else v for i, v in enumerate(h["peak_intensity"])], float)
 
 
 # ====================================================================== the benchmark
@@ -405,7 +391,7 @@ class Benchmark:
         E = np.array(h["energy"])
         M["transmission"] = metric(E[-1] / E[0], "", "cell transmission", R("transmission"))
         M["B_rad"] = metric(sim.solver.B, "rad", "B-integral, on-axis peak", R("B_rad"))
-        I = np.array(h["I_peak"])
+        I = _peak_intensity(h)
         M["I_peak_max_Wcm2"] = metric(I.max() * 1e-4, "W/cm2", "max peak intensity at the cell centre",
                                       R("I_peak_max_Wcm2"))
         Fm = [f for f in h["fluence_mirror"] if f is not None]
@@ -488,9 +474,9 @@ class Benchmark:
 
         # --- history
         C["pass"] = np.array(h["pass"])
-        for k in ("energy", "B", "eta00_total", "V_near", "V_far", "M2x_mean", "M2y_mean",
-                  "peak_power", "I_peak"):
+        for k in ("energy", "B", "eta00_total", "V_near", "V_far", "M2x_mean", "M2y_mean", "peak_power"):
             C[k] = np.array(h[k], float)
+        C["I_peak"] = _peak_intensity(h)
         C["w_peak_x_um"] = np.array(h["w_peak_x"]) * 1e6
         C["w_peak_y_um"] = np.array(h["w_peak_y"]) * 1e6
         return M, C
@@ -530,10 +516,9 @@ class Benchmark:
         os.makedirs(run_dir, exist_ok=True)
         print("run directory:", run_dir)
 
-        Sim = _simulation_class()
-        sim = Sim(pulse, ctx.cell, phi_max=args.phi_max, gouy_step=args.gouy_step,
-                  mode_reference=ctx.mode_reference, near_field=True, record_mirror=True,
-                  record_every=args.record_every)
+        sim = th.LensFrameSimulation(pulse, ctx.cell, phi_max=args.phi_max, gouy_step=args.gouy_step,
+                                     mode_reference=ctx.mode_reference, near_field=True, record_mirror=True,
+                                     record_every=args.record_every)
         ckpt = os.path.join(run_dir, "checkpoint.pkl")
         prev_wall = 0.0
         if not args.no_resume and os.path.exists(ckpt):

@@ -73,3 +73,21 @@ def test_failure_is_shown_in_the_log(qtbot, panel, tmp_path):
 
 def test_window_closes_freely_when_idle(panel):
     assert panel.can_close()
+
+
+def test_error_in_a_pass_keeps_the_passes_done(qtbot, panel, tmp_path, monkeypatch):
+    from thunder4d.lensframe import LensFrameSimulation
+
+    real_run = LensFrameSimulation.run
+
+    def failing_run(self, n_passes=None, verbose=True, max_seconds=None):
+        if self.passes_done == 2:
+            raise MemoryError("out of GPU memory")
+        return real_run(self, n_passes, verbose=False, max_seconds=max_seconds)
+
+    monkeypatch.setattr(LensFrameSimulation, "run", failing_run)
+    panel.start_run(tiny_input(n_passes=5), tmp_path / "crash.npz")
+    wait_idle(qtbot, panel)
+    assert "MemoryError" in panel.log.toPlainText()
+    with np.load(tmp_path / "crash.npz") as f:
+        assert list(f["pass"]) == [0, 1, 2]

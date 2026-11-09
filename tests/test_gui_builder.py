@@ -6,6 +6,7 @@ import thunder4d as th
 from thunder4d.gui._qt import QtWidgets
 from thunder4d.gui.fields import EDITORS, FloatOrTableEditor, editor_for, parse_table, rows_to_table
 from thunder4d.gui.panels.builder import BuilderPanel
+from thunder4d.gui.panels.run import RunPanel
 from thunder4d.gui.session import Session
 from thunder4d.inputfile import FIELDS, Field
 
@@ -173,3 +174,29 @@ def test_builder_is_a_tab_of_the_main_window(qtbot):
     qtbot.addWidget(win)
     assert isinstance(win.panels["builder"], BuilderPanel)
     assert win.tabs.tabText(win.tabs.indexOf(win.panels["builder"])) == "Simulation"
+
+
+def test_input_from_another_panel_asks_before_replacing_edits(qtbot, builder, monkeypatch):
+    builder.load_config(small_input(), None)
+    type_in(builder, "medium.pressure_bar", "0.7")
+    answers = []
+
+    def answer(reply):
+        def ask(*a):
+            answers.append(a)
+            return reply
+        return ask
+
+    monkeypatch.setattr(QtWidgets.QMessageBox, "question", answer(QtWidgets.QMessageBox.StandardButton.No))
+    builder.session.set_config(small_input(medium={"gas": "Ne", "pressure_bar": 2.0}))
+    assert answers and builder.editors["medium.gas"].value() == "Ar"          # edits kept
+    assert builder.session.config["medium"]["pressure_bar"] == pytest.approx(0.7)
+    run = RunPanel(builder.session)                                          # listens after the builder
+    qtbot.addWidget(run)
+    builder.session.set_config(small_input(medium={"gas": "Ne", "pressure_bar": 2.0}))
+    assert "Ar 0.7 bar" in run.input_label.text()
+
+    monkeypatch.setattr(QtWidgets.QMessageBox, "question", answer(QtWidgets.QMessageBox.StandardButton.Yes))
+    builder.session.set_config(small_input(medium={"gas": "Ne", "pressure_bar": 2.0}))
+    assert builder.editors["medium.gas"].value() == "Ne"
+    assert builder.modified                                                  # not saved anywhere yet

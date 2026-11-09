@@ -383,18 +383,22 @@ def grid_settings(cfg):
     return g
 
 
+def input_duration_s(laser):
+    """FWHM [s] of the injected Gaussian pulse: its transform limit stretched by the input GDD."""
+    tl = laser["duration_fs"] * 1e-15
+    gdd = (laser["gdd_fs2"] or 0.0) * 1e-30
+    return tl * np.sqrt(1 + (4 * np.log(2) * gdd / tl ** 2) ** 2)
+
+
 def make_grid(cfg, cell):
     from .lensframe import suggest_lens_grid
 
     las, g = cfg["laser"], cfg["grid"]
-    tl = las["duration_fs"] * 1e-15
-    gdd = (las["gdd_fs2"] or 0.0) * 1e-30
-    stretch = np.sqrt(1 + (4 * np.log(2) * gdd / tl ** 2) ** 2)          # chirped input: longer window
     kw = {"dtype": np.complex64 if g["precision"] == "single" else np.complex128}
     if g["device"] != "auto":
         kw["device"] = g["device"]
     return suggest_lens_grid(cell, las["wavelength_nm"] * 1e-9, g["lambda_min_nm"] * 1e-9,
-                             g["lambda_max_nm"] * 1e-9, tl * stretch, **grid_settings(cfg), **kw)
+                             g["lambda_max_nm"] * 1e-9, input_duration_s(las), **grid_settings(cfg), **kw)
 
 
 def make_pulse(cfg, grid, cell):
@@ -434,9 +438,9 @@ def describe_input(cfg):
     sizing = copy.deepcopy(cfg)
     sizing["grid"]["device"] = "cpu"                     # sizing only: never allocates on the GPU
     grid = make_grid(sizing, cell)
-    tl = las["duration_fs"] * 1e-15
-    stretch = np.sqrt(1 + (4 * np.log(2) * (las["gdd_fs2"] or 0.0) * 1e-30 / tl ** 2) ** 2)
-    peak_power = 2 * np.sqrt(np.log(2) / np.pi) * las["energy_J"] / (tl * stretch)     # Gaussian, 0.94 E / tau
+    from .design.specs import PEAK_POWER_FACTOR
+
+    peak_power = PEAK_POWER_FACTOR["gaussian"] * las["energy_J"] / input_duration_s(las)
     critical = float(cell.medium.critical_power(lam0))
     n_bytes = np.prod(grid.shape) * grid.dtype.itemsize
     return {"w0_m": float(mode["w0"]), "w_mirror_m": float(mode["w_mirror"]), "zR_m": float(mode["zR"]),

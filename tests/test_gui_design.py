@@ -67,6 +67,21 @@ def test_bad_value_blocks_the_search(panel):
     assert not panel.run_button.isEnabled()
 
 
+@pytest.mark.parametrize(("path", "text"), [("constraints.pressure.pressure_bar", "3"),
+                                            ("search.round_trips", "20, 5"),
+                                            ("refinement.n_candidates", ""),
+                                            ("constraints.space.max_separation_m.value", "")])
+def test_incomplete_values_are_flagged_before_the_search(panel, path, text):
+    panel.editors[path].input.setText(text)
+    panel.editors[path].changed.emit()
+    assert path in panel.errors and not panel.run_button.isEnabled()
+
+
+def test_no_gas_is_flagged(panel):
+    edit(panel, "constraints.gas.allowed", [])
+    assert "choose at least one" in panel.errors["constraints.gas.allowed"]
+
+
 def test_target_duration_shown_only_for_that_objective(panel):
     form, editor = panel.rows["target.target_duration_fs"]
     assert not form.isRowVisible(editor)
@@ -143,3 +158,33 @@ def test_task_cancel(qtbot):
         task.start()
         task.cancel()
     task.wait()
+
+
+def test_two_tasks_keep_their_own_output(qtbot):
+    """A design search and a run at the same time: each log gets its own lines, even after the other ends."""
+    import sys
+
+    stdout = sys.stdout
+    run_lines, design_lines = [], []
+
+    def long(task):
+        for i in range(5):
+            print("run", i)
+            time.sleep(0.05)
+
+    def short(task):
+        print("design")
+
+    run = Task(long)
+    run.output.connect(run_lines.append)
+    design = Task(short)
+    design.output.connect(design_lines.append)
+    with qtbot.waitSignal(run.succeeded, timeout=10_000):
+        run.start()
+        design.start()
+    design.wait()
+    run.wait()
+    qtbot.waitUntil(lambda: len(run_lines) == 5)
+    assert run_lines == [f"run {i}" for i in range(5)] and design_lines == ["design"]
+    sys.stdout.write("")                      # main thread still prints to the real stdout
+    assert getattr(sys.stdout, "fallback", sys.stdout) is stdout

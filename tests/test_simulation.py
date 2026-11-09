@@ -126,3 +126,21 @@ def test_resume_continues_exactly_like_an_uninterrupted_run(kerr, kerr_run, tmp_
     resumed.run(verbose=False)
     np.testing.assert_array_equal(resumed.Aw, kerr_run.Aw)
     assert resumed.solver.B == kerr_run.solver.B
+
+
+def test_resume_accepts_a_checkpoint_from_an_older_history(kerr, tmp_path):
+    """A checkpoint written before a history key existed: the key is filled with None, the run goes on."""
+    import pickle
+
+    cell, p, _ = kerr
+    run(p, cell, 2).checkpoint(tmp_path / "ckpt.pkl")
+    with open(tmp_path / "ckpt.pkl", "rb") as f:
+        st = pickle.load(f)
+    del st["history"]["peak_intensity"]
+    with open(tmp_path / "ckpt.pkl", "wb") as f:
+        pickle.dump(st, f)
+    resumed = m.MPCSimulation(p, cell, near_field=False, record_mirror=False).resume(tmp_path / "ckpt.pkl")
+    resumed.run(verbose=False)
+    assert resumed.history["peak_intensity"][:3] == [None] * 3
+    assert resumed.history["peak_intensity"][-1] > 0
+    assert resumed.history["wall_s"][-1] >= st["history"]["wall_s"][-1]

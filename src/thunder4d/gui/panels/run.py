@@ -67,15 +67,17 @@ def simulate(cfg: dict[str, Any], path: Path, include_field: bool, task: Task) -
     t0 = time.time()
     sim = build_simulation(cfg, verbose=True).sim
     task.report(snapshot(sim, t0, recorded=True))
-    while not sim.done and not task.stop_requested:
-        recorded_before = len(sim.history["pass"])
-        sim.run(n_passes=1, verbose=True)
-        task.report(snapshot(sim, t0, recorded=len(sim.history["pass"]) > recorded_before))
-    if task.stop_requested:
-        print(f"stopped after pass {sim.passes_done}/{sim.cell.n_passes}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    sim.save(path, include_field=include_field)
-    print(f"saved {path}")
+    try:
+        while not sim.done and not task.stop_requested:
+            recorded_before = len(sim.history["pass"])
+            sim.run(n_passes=1, verbose=True)
+            task.report(snapshot(sim, t0, recorded=len(sim.history["pass"]) > recorded_before))
+        if task.stop_requested:
+            print(f"stopped after pass {sim.passes_done}/{sim.cell.n_passes}")
+    finally:                                   # an error in a pass keeps the passes already computed
+        path.parent.mkdir(parents=True, exist_ok=True)
+        sim.save(path, include_field=include_field)
+        print(f"saved {path} ({sim.passes_done}/{sim.cell.n_passes} passes)")
     return Outcome(path, sim.passes_done, sim.cell.n_passes)
 
 
@@ -141,10 +143,11 @@ class RunPanel(QtWidgets.QWidget):
         layout.addWidget(self.tabs, 1)
 
         session.config_changed.connect(self._config_changed)
-        self._config_changed(session.config)
+        self._config_changed()
 
     # ------------------------------------------------------------ input
-    def _config_changed(self, cfg: dict[str, Any] | None) -> None:
+    def _config_changed(self, _: Any = None) -> None:
+        cfg = self.session.config          # the current input (a panel may have replaced the one signalled)
         if cfg is None:
             self.input_label.setText("<b>No valid input.</b> Fill in the Simulation tab (or open an input file).")
         else:

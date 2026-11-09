@@ -223,8 +223,13 @@ class MPCSimulation:
     def resume(self, path):
         with open(path, "rb") as f:
             st = pickle.load(f)
-        self.history = st["history"]
+        history = st["history"]
+        for key in self.history:          # keys added to the history after the checkpoint was written
+            history.setdefault(key, [None] * len(history["pass"]))
+        self.history = history
         self.passes_done = st["passes_done"]
+        if history["wall_s"]:             # wall time keeps counting from the checkpoint
+            self._t0 = time.time() - history["wall_s"][-1]
         if "state" in st:
             self.state = self.grid.asarray(st["state"])
             self._centre = (-1, None)

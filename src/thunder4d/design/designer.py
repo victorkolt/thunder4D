@@ -24,6 +24,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 from ..cell import MPC
+from ..inputfile import _jsonable
 from .catalog.gases import get_gas
 from .catalog.mirrors import cavity_coatings, get_mirror
 from .specs import DesignProblem, Tolerance
@@ -34,20 +35,6 @@ _UNITS = {"spot_separation": " [w]", "edge_clearance": " [w]", "fluence": " [J/c
           "chamber_length": " [m]", "b_per_pass": " [rad]", "b_total": " [rad]", "pressure": " [bar]",
           "avg_power_mirror": " [W]"}
 _ZERO_SCALE = {"prechirp_gdd_fs2": 1000.0, "compressor_gdd_fs2": 1000.0, "pressure_bar": 0.1}
-
-
-def _jsonable(v):
-    if isinstance(v, np.ndarray):
-        return v.tolist()
-    if isinstance(v, np.generic):
-        return v.item()
-    if isinstance(v, dict):
-        return {k: _jsonable(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [_jsonable(x) for x in v]
-    if isinstance(v, float) and not np.isfinite(v):
-        return None
-    return v
 
 
 # ============================================================ one configuration

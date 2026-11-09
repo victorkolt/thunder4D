@@ -10,7 +10,7 @@ Signals are queued to the GUI thread, so slots may touch widgets.
 """
 from __future__ import annotations
 
-import contextlib
+import sys
 import threading
 import traceback
 from collections.abc import Callable
@@ -42,6 +42,33 @@ class _Lines:
             self.buffer = ""
 
 
+class _ThreadStdout:
+    """sys.stdout that sends what a task's thread prints to that task; other threads print as before.
+    Installed once: tasks running at the same time each keep their own output."""
+
+    def __init__(self, fallback: Any):
+        self.fallback = fallback
+        self.targets: dict[int, _Lines] = {}
+
+    def _target(self) -> Any:
+        return self.targets.get(threading.get_ident(), self.fallback)
+
+    def write(self, text: str) -> int:
+        return self._target().write(text)
+
+    def flush(self) -> None:
+        self._target().flush()
+
+    def __getattr__(self, name: str) -> Any:        # encoding, isatty, ... of the real stdout
+        return getattr(self.fallback, name)
+
+
+def _thread_stdout() -> _ThreadStdout:
+    if not isinstance(sys.stdout, _ThreadStdout):
+        sys.stdout = _ThreadStdout(sys.stdout)
+    return sys.stdout
+
+
 class Task(QtCore.QThread):
     output = QtCore.Signal(str)          # one printed line
     progress = QtCore.Signal(object)     # whatever work() passes to report()
@@ -70,17 +97,17 @@ class Task(QtCore.QThread):
         self.progress.emit(value)
 
     def run(self) -> None:
-        # stdout is redirected for the whole process while the task runs (prints are rare in the GUI thread)
         lines = _Lines(self.output.emit)
+        stdout = _thread_stdout()
+        stdout.targets[threading.get_ident()] = lines
         try:
-            with contextlib.redirect_stdout(lines):  # type: ignore[arg-type]
-                result = self.work(self)
-            lines.flush()
+            outcome: tuple[Any, ...] = (self.succeeded, self.work(self))
         except Cancelled:
-            lines.flush()
-            self.cancelled.emit()
+            outcome = (self.cancelled,)
         except Exception:  # noqa: BLE001  (shown to the user, the window keeps running)
-            lines.flush()
-            self.failed.emit(traceback.format_exc())
-        else:
-            self.succeeded.emit(result)
+            outcome = (self.failed, traceback.format_exc())
+        finally:
+            lines.flush()                      # the last printed lines come before the result
+            del stdout.targets[threading.get_ident()]
+        signal, *args = outcome
+        signal.emit(*args)

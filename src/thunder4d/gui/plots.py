@@ -143,18 +143,24 @@ def draw_spectra(r, fig, o):
 
 
 GDD_BOUNDS_FS2 = (-30000.0, 30000.0)
+OVERSAMPLED_SIZE = 2e6        # pixels x time samples x oversampling: about a second, a few 100 MB
 
 
 def compressed(r: Any) -> dict[str, Any]:
-    """Best uniform GDD of the final field (cached on the results): the GDD scan of dg.compress, and the
-    compressed pulse on an 8x oversampled time axis (coarse grids hold short pulses in a few samples)."""
+    """Best uniform GDD of the final field (cached on the results): the GDD scan of dg.compress, and, on
+    small grids, the compressed pulse on an oversampled time axis (they hold short pulses in a few
+    samples). Large grids sample the pulse well enough and would take minutes oversampled."""
     if "compress" not in r.cache:
         from ..design.export import compress_oversampled
 
         g, A = r.grid(), r["Aw_final"]
-        scan = dg.compress(g, A, gdd_bounds_fs2=GDD_BOUNDS_FS2)
-        fine = compress_oversampled(g, A, g.energy(A), GDD_BOUNDS_FS2)
-        r.cache["compress"] = scan | {k: fine[k] for k in ("gdd_fs2", "t_fs", "P", "fwhm_fs", "tl_fwhm_fs")}
+        out = dg.compress(g, A, gdd_bounds_fs2=GDD_BOUNDS_FS2)
+        F = np.sum(np.abs(A) ** 2, axis=2)
+        up = min(8, int(OVERSAMPLED_SIZE // (np.count_nonzero(F > 1e-4 * F.max()) * g.Nt)))
+        if up >= 2:
+            fine = compress_oversampled(g, A, g.energy(A), GDD_BOUNDS_FS2, up=up)
+            out |= {k: fine[k] for k in ("gdd_fs2", "t_fs", "P", "fwhm_fs", "tl_fwhm_fs")}
+        r.cache["compress"] = out
     return r.cache["compress"]
 
 

@@ -64,6 +64,18 @@ DESIGN_FIELDS: dict[str, Field] = {
     "search.branches": Field("Branches", "multichoice", choices=("concentric", "planar")),
     "refinement.n_candidates": Field("Designs to find", "int"),
 }
+RANGES = ("constraints.pressure.pressure_bar", "search.round_trips")     # (min, max) pairs
+
+
+def checked(path: str, field: Field, value: Any) -> Any:
+    """The value of a design field, or ValueError if the search could not use it."""
+    if (value is None or value == []) and not field.optional:
+        raise ValueError("required" if field.kind != "multichoice" else "choose at least one")
+    if path in RANGES and (len(value) != 2 or value[0] > value[1]):
+        raise ValueError("give two values: min, max")
+    return value
+
+
 SOLVERS = {"Fast 1+1D (accurate, minutes)": Fast1DQuick, "Analytic (instant, rough)": AnalyticQuick}
 COLUMNS = ("Gas", "p [bar]", "R [m]", "M", "k", "Passes", "Branch", "d [m]", "τ out [fs]", "Throughput", "Score")
 
@@ -187,7 +199,7 @@ class DesignPanel(QtWidgets.QWidget):
 
     def _edited(self, path: str) -> None:
         try:
-            set_attr(self.problem, path, self.editors[path].value())
+            set_attr(self.problem, path, checked(path, DESIGN_FIELDS[path], self.editors[path].value()))
             self.errors.pop(path, None)
         except ValueError as err:
             self.errors[path] = f"{DESIGN_FIELDS[path].label}: {err}"
