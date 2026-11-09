@@ -38,6 +38,12 @@ The pages of this section:
 The interactive introduction is the notebook ``examples/design_tutorial.ipynb``; the objects are
 listed in :doc:`../api_reference/design`.
 
+.. note::
+
+   The plots (``design_map(...).plot()``, ``validate_4d(...).plot()`` and the ``plot()`` of the
+   fast1d output) need matplotlib, which is an optional dependency:
+   ``uv add "thunder4d[examples]"``. Nothing else of the helper needs it.
+
 Minimal example
 ---------------
 

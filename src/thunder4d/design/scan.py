@@ -116,7 +116,9 @@ class DesignMap:
     def plot(self, ax=None, contour="duration_fs", levels=None, mark=(), show_best=True):
         """Regions coloured by limiting constraint (feasible region in white), contours of a metric,
         best feasible point and `mark` (list of (x, y, label)) marked."""
-        import matplotlib.pyplot as plt
+        from ._plot import pyplot
+
+        plt = pyplot()
         from matplotlib.colors import ListedColormap
         from matplotlib.patches import Patch
 

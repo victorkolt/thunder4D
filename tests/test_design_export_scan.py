@@ -125,3 +125,13 @@ def test_runaway_stops_quickly_and_is_rejected():
         Fast1DQuick().simulate(prob, c)
     evaluated(prob, c)
     assert not np.isfinite(c.score) and "simulation" in c.slacks
+
+
+def test_plot_without_matplotlib_says_how_to_install_it(monkeypatch):
+    import sys
+
+    from thunder4d.design._plot import pyplot
+
+    monkeypatch.setitem(sys.modules, "matplotlib.pyplot", None)       # as if it was not installed
+    with pytest.raises(ImportError, match=r"thunder4d\[examples\]"):
+        pyplot()

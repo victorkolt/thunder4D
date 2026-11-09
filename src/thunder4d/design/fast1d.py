@@ -375,7 +375,9 @@ class MPCOutput:
         return "\n".join(lines)
 
     def plot(self):
-        import matplotlib.pyplot as plt
+        from ._plot import pyplot
+
+        plt = pyplot()
 
         fig, ax = plt.subplots(2, 2, figsize=(10, 7))
         for which, lab in (("in", "input"), ("out", "output")):

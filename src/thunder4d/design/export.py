@@ -172,7 +172,9 @@ class Validation4D:
         return "\n".join(lines)
 
     def plot(self):
-        import matplotlib.pyplot as plt
+        from ._plot import pyplot
+
+        plt = pyplot()
 
         from .. import diagnostics as dg
         fig, ax = plt.subplots(1, 2, figsize=(11, 4))

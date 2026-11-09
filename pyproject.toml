@@ -22,7 +22,6 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "matplotlib>=3.10.9",
     "numpy>=2.0",
     "scipy>=1.10",
 ]
@@ -32,7 +31,7 @@ examples = ["matplotlib"]
 gpu = ["cupy-cuda12x"]
 
 [dependency-groups]
-dev = ["pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.95"]
+dev = ["matplotlib>=3.10.9", "pytest>=9.2.0", "ruff>=0.17.3", "ty>=0.0.95"]   # matplotlib: plots (type-checked in CI)
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.urls]
