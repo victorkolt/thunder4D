@@ -1,6 +1,9 @@
 Extending the code
 ==================
 
+A new feature reaches the graphical interface through its registries (input fields, figures, live
+metrics, panels): see :ref:`the GUI page <gui-extending>`.
+
 New nonlinear terms
 -------------------
 

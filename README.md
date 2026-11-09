@@ -71,6 +71,15 @@ result.export("design.json")            # standard THUNDER4D input file
 
 The default limits are conservative starting points: set them to what your hardware takes (the documentation explains how to calibrate them on a cell that works). The helper is a pre-design tool: one stage, Gaussian beam, ideal GDD compressor, no Raman and no ionisation loss. Simulate the design you keep with the 4D solver.
 
+## Graphical interface
+
+```bash
+uv add "thunder4d[gui]"        # PySide6 + matplotlib, optional
+uv run thunder4d-gui           # or: thunder4d-gui cell.json
+```
+
+Four tabs, from left to right: the design helper (laser, target and limits → ranked designs and design map), the simulation builder (every field of the input file, checked while you type, with the eigenmode, P/Pcr and grid size), the run (live progress, energy, B-integral, peak power and intensity, Stop after the current pass) and the results viewer (caustic, spectra, compressed pulse, spatio-spectral maps; export of figures and data). Everything is saved as the standard input and results files, so a GUI session can be rerun from a script. Documentation: page *Graphical interface*.
+
 ## Physical model
 
 The field is a complex envelope A(x, y, t) with carrier exp[i(k₀z − ω₀t)], normalised so that |A|² is the intensity in W/m². It is propagated with the unidirectional pulse propagation equation (UPPE), written in the frame moving at the group velocity at λ₀:

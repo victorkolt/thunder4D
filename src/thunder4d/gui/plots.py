@@ -142,10 +142,19 @@ def draw_spectra(r, fig, o):
     ax2.legend()
 
 
+GDD_BOUNDS_FS2 = (-30000.0, 30000.0)
+
+
 def compressed(r: Any) -> dict[str, Any]:
-    """dg.compress of the final field (cached on the results)."""
+    """Best uniform GDD of the final field (cached on the results): the GDD scan of dg.compress, and the
+    compressed pulse on an 8x oversampled time axis (coarse grids hold short pulses in a few samples)."""
     if "compress" not in r.cache:
-        r.cache["compress"] = dg.compress(r.grid(), r["Aw_final"])
+        from ..design.export import compress_oversampled
+
+        g, A = r.grid(), r["Aw_final"]
+        scan = dg.compress(g, A, gdd_bounds_fs2=GDD_BOUNDS_FS2)
+        fine = compress_oversampled(g, A, g.energy(A), GDD_BOUNDS_FS2)
+        r.cache["compress"] = scan | {k: fine[k] for k in ("gdd_fs2", "t_fs", "P", "fwhm_fs", "tl_fwhm_fs")}
     return r.cache["compress"]
 
 

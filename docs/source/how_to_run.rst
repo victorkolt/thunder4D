@@ -2,7 +2,8 @@ How to run the code
 ===================
 
 A thunder4d simulation is a short Python script with five steps: medium and cell, grid,
-pulse, simulation, analysis.
+pulse, simulation, analysis. The same can be done without a script in the
+:doc:`graphical interface <gui/gui>`.
 
 Minimal example
 ---------------
