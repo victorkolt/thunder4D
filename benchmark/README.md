@@ -24,12 +24,34 @@ Options common to every benchmark:
 | option | meaning |
 |---|---|
 | `--device auto\|cpu\|gpu`, `--gpu-id 1` | device; `--gpu-id` sets `CUDA_VISIBLE_DEVICES` (one benchmark per A100) |
+| `--kernels auto\|numba\|numpy` | CPU array kernels between the FFTs (`auto`: Numba if installed); a forced value gets its own run directory, so `numba` and `numpy` runs can be timed side by side |
+| `--fft auto\|scipy\|fftw` | CPU FFT library (`auto` = scipy; `fftw` needs pyFFTW and plans the transforms during the first steps); a forced value gets its own run directory |
 | `--preset i` | force grid preset *i* (0 = finest); default: finest that fits (`--budget-gb` on the CPU, 80 % of free GPU memory) |
 | `--phi-max`, `--gouy-step` | step control of the lens-frame solver (convergence checks) |
 | `--set key=value` | change any entry of the benchmark's `params` (repeatable), e.g. `--set n2_1bar=1.1e-23` |
 | `--label name` | prefix of the run directory |
 | `--max-seconds S` | stop cleanly after S seconds; the same command resumes from the checkpoint |
 | `--record-every n`, `--save-field`, `--no-resume`, `--out` | recording, final field in `run.npz`, fresh start, results root |
+
+### Timing the CPU kernels
+
+`--kernels numba` / `--kernels numpy` and `--fft scipy` / `--fft fftw` give separate run
+directories for the same benchmark, so the same command with each value compares them. Compare `ms_per_step` (printed at the end and stored
+in `results.json`): it times the propagation alone, without the diagnostics. `--label` keeps the
+runs apart from earlier ones; `--no-resume` restarts a run that already exists.
+
+```bash
+cd benchmark
+python bench_rueda2021_8fs.py --device cpu --kernels numba --quick --label jit   # compiles the kernels once (cached)
+python bench_rueda2021_8fs.py --device cpu --kernels numpy --max-seconds 600 --label timing
+python bench_rueda2021_8fs.py --device cpu --kernels numba --max-seconds 600 --label timing
+python bench_rueda2021_8fs.py --device cpu --kernels numba --fft fftw --max-seconds 600 --label timing
+```
+
+With `--fft fftw`, the first steps include the FFTW planning (a few seconds per grid); over a
+600 s run it is negligible.
+
+The Numba threads follow `NUMBA_NUM_THREADS` (default: all cores, printed at the start of the run).
 
 ## Output
 
@@ -39,7 +61,7 @@ directory, nothing is ever overwritten, and re-running the same command resumes 
 
 | file | content |
 |---|---|
-| `results.json` | `run` (date, thunder4d version, git commit, device, grid, timing, settings), `params`, `overrides`, `metrics` |
+| `results.json` | `run` (date, thunder4d version, git commit, device, kernels, cpu_count, grid, timing, settings; `propagation_s` and `ms_per_step` time the propagation alone, without the diagnostics, for this session of the run), `params`, `overrides`, `metrics` |
 | `curves.npz` | standard curves (names below) used by `analyze.py` |
 | `run.npz` | `sim.save()`: full per-pass history and axes |
 | `checkpoint.pkl` | simulation state, for resuming |

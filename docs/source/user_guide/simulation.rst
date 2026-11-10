@@ -163,7 +163,8 @@ solvers), for example an aperture:
 **New physics** (ionisation, Raman, ...) goes in the nonlinear term: subclass the solver and override
 :meth:`~thunder4d.solver.UPPESolver.nonlinear`, which works in :math:`(x, y, \Omega) \leftrightarrow
 (x, y, t)`. :class:`~thunder4d.lensframe.LensFrameSolver` inherits it; there :math:`|B|^2` is the
-intensity times :math:`s^2`.
+intensity times :math:`s^2`. Such a solver runs its RK4 in NumPy, not in the Numba kernels
+(:ref:`numba-kernels`).
 
 Results
 -------

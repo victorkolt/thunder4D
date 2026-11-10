@@ -84,11 +84,13 @@ DEFAULTS: dict[str, Any] = {
         "lambda_max_nm": None,
         "precision": "single",            # "single" | "double"
         "device": "auto",                 # "auto" | "cpu" | "gpu"
+        "fft_backend": "auto",            # "auto" (= scipy) | "scipy" | "fftw" (pyFFTW, CPU)
     },
     "solver": {
         "phi_max": 0.02,
         "gouy_step": 0.05,
         "self_steepening": True,
+        "kernels": "auto",                # "auto" | "numba" | "numpy" (CPU array kernels)
     },
     "run": {
         "record_every": 1,
@@ -197,10 +199,12 @@ FIELDS: dict[str, Field] = {
                                      advanced=True),
     "grid.precision": Field("Precision", "choice", choices=("single", "double"), advanced=True),
     "grid.device": Field("Device", "choice", choices=("auto", "cpu", "gpu"), advanced=True),
+    "grid.fft_backend": Field("FFT library", "choice", choices=("auto", "scipy", "numpy", "fftw"), advanced=True),
     # solver
     "solver.phi_max": Field("Max nonlinear phase per step", unit="rad", advanced=True),
     "solver.gouy_step": Field("Max Gouy phase per step", unit="rad", advanced=True),
     "solver.self_steepening": Field("Self-steepening", "bool", advanced=True),
+    "solver.kernels": Field("CPU array kernels", "choice", choices=("auto", "numba", "numpy"), advanced=True),
     # run
     "run.record_every": Field("Record every", "int", unit="passes", advanced=True),
     "run.near_field": Field("Near-field diagnostics", "bool", advanced=True,
@@ -284,6 +288,12 @@ def input_problems(cfg):
         errors.append(("grid.lambda_min_nm", "grid: need lambda_min_nm < laser.wavelength_nm < lambda_max_nm"))
     if cfg["laser"]["shape"] == "measured" and not cfg["laser"]["spectrum"]:
         errors.append(("laser.spectrum", "laser.shape = 'measured' needs laser.spectrum"))
+    from .kernels import KERNELS
+
+    if cfg["grid"]["fft_backend"] not in ("auto", "scipy", "numpy", "fftw"):
+        errors.append(("grid.fft_backend", "grid.fft_backend must be 'auto', 'scipy', 'numpy' or 'fftw'"))
+    if cfg["solver"]["kernels"] not in KERNELS:
+        errors.append(("solver.kernels", f"solver.kernels must be one of {list(KERNELS)}"))
     if cfg["beam"]["injection"] not in ("linear", "nonlinear", "waist"):
         errors.append(("beam.injection", "beam.injection must be 'linear', 'nonlinear' or 'waist'"))
     if cfg["beam"]["injection"] == "waist" and not cfg["beam"]["w0_m"]:
@@ -397,6 +407,8 @@ def make_grid(cfg, cell):
     kw = {"dtype": np.complex64 if g["precision"] == "single" else np.complex128}
     if g["device"] != "auto":
         kw["device"] = g["device"]
+    if g["fft_backend"] != "auto":
+        kw["fft_backend"] = g["fft_backend"]
     return suggest_lens_grid(cell, las["wavelength_nm"] * 1e-9, g["lambda_min_nm"] * 1e-9,
                              g["lambda_max_nm"] * 1e-9, input_duration_s(las), **grid_settings(cfg), **kw)
 
@@ -472,7 +484,7 @@ def build_simulation(cfg, verbose=False):
     sim = LensFrameSimulation(pulse, cell, phi_max=s["phi_max"], gouy_step=s["gouy_step"],
                               record_every=int(r["record_every"]), near_field=r["near_field"],
                               record_mirror=r["record_mirror"], mode_reference=w0,
-                              self_steepening=s["self_steepening"])
+                              self_steepening=s["self_steepening"], kernels=s["kernels"])
     if verbose:
         print(f"[input] {cfg['name']}: grid {grid.Nx}x{grid.Ny}x{grid.Nt}, {cell.n_passes} passes")
     return Built(cfg, cell, grid, pulse, sim, w0)

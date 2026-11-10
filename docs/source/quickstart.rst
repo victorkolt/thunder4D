@@ -10,10 +10,13 @@ Install
    pip install "thunder4d[examples]"   # matplotlib, for the examples and the plots of the design helper
    pip install "thunder4d[gui]"        # graphical interface: thunder4d-gui
    pip install "thunder4d[gpu]"        # CuPy, for an NVIDIA GPU
+   pip install "thunder4d[numba]"      # Numba, faster CPU runs
+   pip install "thunder4d[fftw]"       # pyFFTW, FFTW transforms on the CPU
 
 Python 3.10 or newer, NumPy and SciPy. With CuPy installed, grids run on the GPU by default
 (``device="auto"``; RTX 50-series cards need CUDA 12.8 or newer). ``thunder4d.gpu_available()`` says
-whether it works.
+whether it works. On the CPU, Numba and pyFFTW make runs faster (:ref:`numba-kernels`,
+:ref:`fftw-backend`).
 
 Units and conventions
 ---------------------

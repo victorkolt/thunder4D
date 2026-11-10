@@ -36,12 +36,13 @@ def suggest_lens_grid(cell, lambda0, lambda_min, lambda_max, pulse_fwhm, *, box_
 class LensFrameSolver(UPPESolver):
     """Split step in zeta: [kinetic+dispersion](h/2) [potential(h/2) Kerr-RK4(h) potential(h/2)]
     [kinetic+dispersion](h/2), kinetic halves merged (one 2D FFT pair per step).
-    phi_max: peak nonlinear phase per step; gouy_step: max step in accumulated Gouy phase [rad]."""
+    phi_max: peak nonlinear phase per step; gouy_step: max step in accumulated Gouy phase [rad].
+    kernels: 'auto' | 'numba' | 'numpy', see UPPESolver."""
 
     def __init__(self, grid, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True,
-                 absorber_frac=0.9, absorber_order=16):
+                 absorber_frac=0.9, absorber_order=16, kernels="auto"):
         # UPPESolver.__init__ is not called: it would build the 3D operator we want to avoid
-        self._setup(grid, cell.medium, phi_max, self_steepening, absorber_frac, absorber_order)
+        self._setup(grid, cell.medium, phi_max, self_steepening, absorber_frac, absorber_order, kernels)
         self.cell = cell
         self.zR, self.zeta_m, self.s_m = lens_frame_scale(cell)
         self.h_max = gouy_step * self.zR
@@ -53,6 +54,10 @@ class LensFrameSolver(UPPESolver):
         self._x2 = (g.x ** 2)[:, None, None]
         self._y2 = (g.y ** 2)[None, :, None]
         self._kk = k[None, None, :]
+        if self._nb:   # 1D factors of the separable phases, combined in one pass by mul_separable
+            self._k1, self._kx2_1, self._ky2_1 = k, g.kx ** 2, g.ky ** 2
+            self._x2_1, self._y2_1 = g.x ** 2, g.y ** 2
+            self._ones_w = np.ones(g.Nt, self._cdt)
 
     def z_of_zeta(self, zeta):
         return self.zR * np.tan(zeta / self.zR)
@@ -63,6 +68,12 @@ class LensFrameSolver(UPPESolver):
             return Bw
         F, xp = self.grid.fft, self.xp
         Bk = F.fft2(Bw)
+        if self._nb:
+            c = h / (2 * self._k1)
+            self._k.mul_separable(Bk, np.exp(-1j * np.outer(self._kx2_1, c)).astype(self._cdt),
+                             np.exp(-1j * np.outer(self._ky2_1, c)).astype(self._cdt),
+                             np.exp(1j * self._beta * dz).astype(self._cdt))
+            return F.ifft2(Bk).astype(self.grid.dtype, copy=False)
         Bk *= xp.asarray(np.exp(-1j * self._kx2 * h / (2 * self._kk)).astype(self._cdt))
         Bk *= xp.asarray(np.exp(-1j * self._ky2 * h / (2 * self._kk)).astype(self._cdt))
         Bk *= xp.asarray(np.exp(1j * self._beta * dz).astype(self._cdt)[None, None, :])
@@ -73,6 +84,11 @@ class LensFrameSolver(UPPESolver):
         if h == 0:
             return Bw
         xp, c = self.xp, h / (2 * self.zR ** 2)
+        if self._nb:
+            kc = self._k1 * c
+            self._k.mul_separable(Bw, np.exp(-1j * np.outer(self._x2_1, kc)).astype(self._cdt),
+                             np.exp(-1j * np.outer(self._y2_1, kc)).astype(self._cdt), self._ones_w)
+            return Bw
         Bw *= xp.asarray(np.exp(-1j * self._kk * self._x2 * c).astype(self._cdt))
         Bw *= xp.asarray(np.exp(-1j * self._kk * self._y2 * c).astype(self._cdt))
         return Bw
@@ -164,9 +180,10 @@ class LensFrameSimulation(MPCSimulation):
 
     solver: LensFrameSolver
 
-    def __init__(self, pulse, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True, **kw):
+    def __init__(self, pulse, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True,
+                 kernels="auto", **kw):
         solver = LensFrameSolver(pulse.grid, cell, phi_max=phi_max, gouy_step=gouy_step,
-                                 self_steepening=self_steepening)
+                                 self_steepening=self_steepening, kernels=kernels)
         self.mirror_scale = solver.s_m
         super().__init__(pulse, cell, solver=solver, **kw)
 

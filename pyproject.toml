@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=2.0",
+    "pyfftw>=0.15.0",
     "scipy>=1.10",
 ]
 
@@ -30,11 +31,13 @@ dependencies = [
 examples = ["matplotlib"]
 gpu = ["cupy-cuda12x"]
 gui = ["pyside6-essentials>=6.12.0", "matplotlib>=3.10.9"]   # thunder4d-gui (Qt widgets + embedded plots)
+numba = ["numba>=0.61"]   # fused multithreaded CPU kernels for the 4D solvers
+fftw = ["pyfftw>=0.14"]   # planned FFTW transforms on the CPU (fft_backend="fftw")
 
 [dependency-groups]
-# matplotlib: plots, pyside6 + pytest-qt: GUI (type-checked and tested in CI)
-dev = ["matplotlib>=3.10.9", "pyside6-essentials>=6.12.0", "pytest>=9.2.0", "pytest-qt>=4.5.0", "ruff>=0.17.3",
-       "ty>=0.0.95"]
+# matplotlib: plots, pyside6 + pytest-qt: GUI, numba + pyfftw: CPU options (type-checked and tested in CI)
+dev = ["matplotlib>=3.10.9", "numba>=0.61", "pyfftw>=0.14", "pyside6-essentials>=6.12.0", "pytest>=9.2.0",
+       "pytest-qt>=4.5.0", "ruff>=0.17.3", "ty>=0.0.95"]
 docs = ["sphinx>=7", "sphinx_rtd_theme>=2"]
 
 [project.scripts]

@@ -42,5 +42,37 @@ Cost
   150 × 150 × 135; a 20-pass run at B ≈ 16 rad takes about 900 steps.
 - **Memory:** 8–10 field arrays of ``Nx·Ny·Nt·8`` bytes (``complex64``): 256³ is 134 MB each. The
   standard solver also stores its linear operator and up to ``cache_size`` propagators.
-- **Faster:** a GPU, SciPy FFTs on all cores (the default), ``record_every > 1``, ``near_field=False``,
-  fewer ``profile_wavelengths``.
+- **Faster:** a GPU, Numba and FFTW on the CPU (below), SciPy FFTs on all cores (the default),
+  ``record_every > 1``, ``near_field=False``, fewer ``profile_wavelengths``.
+
+.. _numba-kernels:
+
+Numba kernels (CPU)
+-------------------
+
+With Numba installed (``thunder4d[numba]``), both solvers replace the NumPy operations between the FFTs
+(Kerr product, RK4 stages, phase products) by fused multithreaded kernels. The results are the same to
+rounding.
+
+- ``kernels="auto"`` (default) uses them on a CPU grid when Numba is installed. ``"numpy"`` or
+  ``"numba"`` forces one, also as ``solver.kernels`` in input files. ``solver.kernels`` says which runs.
+- The first call compiles them in a few seconds. They are then cached on disk.
+- Threads: ``NUMBA_NUM_THREADS`` (default all cores).
+- On one core, 1.6× on an RK4 sub-step and 1.3× on a lens-frame step (96 × 96 × 512). The gain grows
+  with the core count.
+- A solver with an overridden ``nonlinear`` keeps the NumPy RK4. Its linear steps still use the kernels.
+
+.. _fftw-backend:
+
+FFTW (CPU)
+----------
+
+With pyFFTW installed (``thunder4d[fftw]``), ``fft_backend="fftw"`` on the grid (``grid.fft_backend`` in
+input files, ``--fft fftw`` for the benchmarks) runs the solvers' FFTs with FFTW. The results are the
+same to rounding.
+
+- FFTW plans each transform once, in a few seconds during the first step.
+- On one core, a lens-frame step (96 × 96 × 512, Numba kernels) goes from 520 to 410 ms.
+- Only the 3D fields of the solvers use FFTW. GPU grids use cuFFT.
+- Threads: ``workers`` of the grid (default all cores).
+- The pyFFTW wheels include FFTW, which is GPL.

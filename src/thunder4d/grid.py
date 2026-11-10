@@ -12,6 +12,8 @@ Conventions (read this once, everything else follows)
   grid.shift_xy(), grid.shift_w() for plotting.
 * The solver's home domain is (x, y, Om): complex arrays of shape (Nx, Ny, Nt).
 """
+import importlib.util
+import os
 from typing import Any
 
 import numpy as np
@@ -21,38 +23,110 @@ from scipy.constants import c as C0
 from .backend import get_xp, resolve_device, xp_of
 
 
+class _FFTWPlans:
+    """Planned FFTW transforms (pyFFTW) for 3D complex fields; one plan per (shape, dtype, axes,
+    direction), made on first use (FFTW_MEASURE: a few seconds for a new grid shape, then reused;
+    FFTW keeps the result for the session, so other grids of the same shape plan instantly).
+    The plans of one shape share a pair of planning buffers (2 field arrays) and are pointed back
+    at them after each call, so no reference to the caller's arrays is kept."""
+
+    def __init__(self, threads, effort):
+        import pyfftw
+        self.pyfftw, self.threads, self.effort, self.plans, self.buffers = pyfftw, threads, effort, {}, {}
+
+    def __call__(self, a, axes, direction, scale):
+        key = (a.shape, a.dtype.str, axes, direction)
+        plan = self.plans.get(key)
+        bufs = self.buffers.get(key[:2])
+        if bufs is None:
+            bufs = self.buffers[key[:2]] = (self.pyfftw.empty_aligned(a.shape, a.dtype),
+                                            self.pyfftw.empty_aligned(a.shape, a.dtype))
+        if plan is None:
+            plan = self.plans[key] = self.pyfftw.FFTW(*bufs, axes=axes, direction=direction,
+                                                      flags=(self.effort,), threads=self.threads)
+        if not (a.flags.c_contiguous and self.pyfftw.is_byte_aligned(a, plan.input_alignment)):
+            a = self.aligned(a)                              # the plan needs aligned C-ordered input
+        out = self.pyfftw.empty_aligned(a.shape, a.dtype)    # new array, like scipy.fft
+        plan.update_arrays(a, out)                           # out of place: a is preserved
+        plan.execute()
+        plan.update_arrays(*bufs)                            # drop the references to a and out
+        if scale != 1:
+            out *= out.real.dtype.type(scale)
+        return out
+
+    def aligned(self, a):
+        """Copy of a in an aligned, C-ordered array (FFTW's SIMD alignment)."""
+        b = self.pyfftw.empty_aligned(a.shape, a.dtype)
+        b[...] = a
+        return b
+
+
+def fftw_available():
+    """True if pyFFTW is installed (fft_backend='fftw' usable)."""
+    return importlib.util.find_spec("pyfftw") is not None
+
+
 class FFT:
-    """Thin wrapper so the backend can be switched (scipy default, numpy, or cupyx on the GPU).
-    The arrays passed in must live on the device of the backend (host for scipy/numpy)."""
+    """Thin wrapper so the backend can be switched (scipy default, numpy, fftw, or cupyx on the GPU).
+    The arrays passed in must live on the device of the backend (host for scipy/numpy/fftw).
+
+    backend='fftw' (pyFFTW): planned FFTW transforms for the 3D complex fields of the solvers
+    (planning effort FFT.fftw_effort, threads = workers); any other array (1D/2D diagnostics,
+    real input) goes to scipy.fft. Same results to rounding. Ignored on the GPU (cuFFT)."""
 
     mod: Any   # scipy.fft, numpy.fft or cupyx.scipy.fft: same interface, no common type
+    fftw_effort = "FFTW_MEASURE"   # or "FFTW_ESTIMATE" (no planning time), "FFTW_PATIENT"
 
     def __init__(self, backend="auto", workers=None, device="cpu"):
+        self._fftw = None
         if device == "gpu":
             import cupyx.scipy.fft as mod
             self._kw, self.mod, self.backend = {}, mod, "cupy"
             return
-        if backend in ("auto", "scipy"):   # pocketfft C++: ~8x faster than numpy.fft for 2D
-            mod, backend = scipy.fft, "scipy"
+        if backend in ("auto", "scipy", "fftw"):   # pocketfft C++: ~8x faster than numpy.fft for 2D
+            mod = scipy.fft
             self._kw = {"workers": workers if workers is not None else -1}
+            if backend == "fftw":
+                if not fftw_available():
+                    raise RuntimeError("fft_backend='fftw' needs pyFFTW (uv pip install pyfftw, "
+                                       "or thunder4d[fftw])")
+                n = os.cpu_count() or 1        # scipy convention: workers=-1 = all cores, -2 = all but one
+                threads = n if workers is None else (int(workers) if workers > 0 else max(1, n + 1 + int(workers)))
+                self._fftw = _FFTWPlans(threads, self.fftw_effort)
+            else:
+                backend = "scipy"
         elif backend == "numpy":
             mod = np.fft
             self._kw = {}
         else:
-            raise ValueError("backend must be 'auto', 'numpy' or 'scipy'")
+            raise ValueError("backend must be 'auto', 'numpy', 'scipy' or 'fftw'")
         self.mod = mod
         self.backend = backend
 
+    def _planned(self, a):
+        """The FFTW plans if they handle this array (3D complex host array), else None (scipy)."""
+        if isinstance(a, np.ndarray) and a.ndim == 3 and a.dtype in (np.complex64, np.complex128):
+            return self._fftw
+        return None
+
     def fft2(self, a):
+        if (plans := self._planned(a)) is not None:
+            return plans(a, (0, 1), "FFTW_FORWARD", 1)
         return self.mod.fft2(a, axes=(0, 1), **self._kw)
 
     def ifft2(self, a):
+        if (plans := self._planned(a)) is not None:
+            return plans(a, (0, 1), "FFTW_BACKWARD", 1 / (a.shape[0] * a.shape[1]))
         return self.mod.ifft2(a, axes=(0, 1), **self._kw)
 
     def ft_t(self, a):   # time -> Omega
+        if (plans := self._planned(a)) is not None:
+            return plans(a, (2,), "FFTW_BACKWARD", 1)
         return self.mod.ifft(a, axis=-1, norm="forward", **self._kw)
 
     def ift_t(self, a):  # Omega -> time
+        if (plans := self._planned(a)) is not None:
+            return plans(a, (2,), "FFTW_FORWARD", 1 / a.shape[2])
         return self.mod.fft(a, axis=-1, norm="forward", **self._kw)
 
 
@@ -74,6 +148,8 @@ class Grid:
     dtype  : np.complex64 (default, half the memory) or np.complex128.
     device : 'auto' (GPU if CuPy works, else CPU), 'cpu' or 'gpu'. The field and the propagators
              live on that device; the axes (x, lam, ...) are always NumPy arrays.
+    fft_backend: 'auto' / 'scipy' (pocketfft), 'numpy', or 'fftw' (pyFFTW, planned transforms for the
+             solvers' 3D fields; see FFT). workers: FFT threads (default: all cores).
     """
 
     def __init__(self, Nx, dx, Nt, lambda0, *, dt=None, lambda_min=None, lambda_max=None,

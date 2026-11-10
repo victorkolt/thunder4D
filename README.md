@@ -15,6 +15,8 @@ to a ready-to-run cell, and a graphical interface.
 pip install thunder4d               # or: uv add thunder4d
 pip install "thunder4d[gpu]"        # NVIDIA GPU (CuPy)
 pip install "thunder4d[gui]"        # graphical interface: thunder4d-gui
+pip install "thunder4d[numba]"      # faster CPU runs (Numba kernels)
+pip install "thunder4d[fftw]"       # FFTW transforms on the CPU (fft_backend="fftw")
 ```
 
 ## Example

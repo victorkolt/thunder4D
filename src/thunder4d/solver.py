@@ -8,15 +8,27 @@ The Kerr term does not depend on (kx, ky) so it is evaluated in (x, y, Om) with 
 the linear step needs only 2D spatial FFTs. Strang splitting, RK4 for the nonlinear sub-step,
 step size set by the peak nonlinear phase per step (phi_max), like the B-driven dz of the MATLAB code.
 Extension point: override `nonlinear(Aw)` (ionisation, Raman, ...).
+
+kernels: 'auto' (default) uses the fused, multithreaded Numba kernels of thunder4d.kernels on the
+CPU when Numba is installed, NumPy array operations otherwise (and always on the GPU); 'numba' /
+'numpy' force one or the other. Same results to rounding. A subclass that overrides `nonlinear`
+keeps its own Kerr term: the fused RK4 is then not used.
 """
+from typing import Any
+
 import numpy as np
 from scipy.constants import c as C0
 
+from . import kernels as kn
+
 
 class UPPESolver:
+    _k: Any   # thunder4d._numba_kernels when kernels == 'numba', else None
+
     def __init__(self, grid, medium, *, phi_max=0.02, dz_max=None, paraxial=False,
-                 self_steepening=True, absorber_frac=0.9, absorber_order=16, cache_size=4):
-        self._setup(grid, medium, phi_max, self_steepening, absorber_frac, absorber_order)
+                 self_steepening=True, absorber_frac=0.9, absorber_order=16, cache_size=4,
+                 kernels="auto"):
+        self._setup(grid, medium, phi_max, self_steepening, absorber_frac, absorber_order, kernels)
         self.dz_max = dz_max
         g, xp = grid, self.xp
         KX2 = xp.asarray(g.kx[:, None] ** 2 + g.ky[None, :] ** 2)
@@ -33,9 +45,10 @@ class UPPESolver:
             self.D[:, :, j] = kz - self.k0 - self.k1 * float(g.Omega[j])
         self._cache, self.cache_size = {}, cache_size
 
-    def _setup(self, grid, medium, phi_max, self_steepening, absorber_frac, absorber_order):
+    def _setup(self, grid, medium, phi_max, self_steepening, absorber_frac, absorber_order,
+               kernels="auto"):
         """Everything but the linear operator (shared with LensFrameSolver): wavenumbers,
-        Kerr coefficient, absorbers and counters."""
+        Kerr coefficient, absorbers, counters and the choice of array kernels."""
         self.grid, self.medium, self.phi_max = grid, medium, phi_max
         g = grid
         w, w0 = g.omega, g.omega0
@@ -54,6 +67,13 @@ class UPPESolver:
         gam = gam * np.exp(-(u / 0.95) ** 40) * g.valid
         self.igamma = xp.asarray((1j * gam).astype(g.dtype)[None, None, :])
 
+        self.kernels = kn.resolve_kernels(kernels, g.device)     # 'numba' or 'numpy'
+        self._nb = self.kernels == "numba"
+        self._k = kn.load() if self._nb else None              # jitted kernels (imports Numba)
+        self._ig1 = np.ascontiguousarray((1j * gam).astype(g.dtype))   # igamma as a 1D host array
+        # fused RK4 only with the built-in Kerr term (a subclass may add ionisation, Raman, ...)
+        self._fused_rk4 = self._nb and type(self).nonlinear is UPPESolver.nonlinear
+
         # soft absorbers applied once per half-pass (not per step)
         ax = lambda v: np.exp(-(np.abs(v) / (absorber_frac * np.abs(v).max())) ** absorber_order)
         self.absorber_xy = xp.asarray((ax(g.x)[:, None] * ax(g.y)[None, :]).astype(g.rdtype)[:, :, None])
@@ -71,7 +91,10 @@ class UPPESolver:
             return Aw
         F = self.grid.fft
         Ak = F.fft2(Aw)
-        Ak *= self._propagator(h)
+        if self._nb:
+            self._k.mul_inplace(Ak, self._propagator(h))
+        else:
+            Ak *= self._propagator(h)
         return F.ifft2(Ak).astype(self.grid.dtype, copy=False)
 
     def _propagator(self, h):
@@ -79,8 +102,12 @@ class UPPESolver:
         key = float(f"{h:.9e}")
         P = self._cache.pop(key, None)
         if P is None:
-            P = self.xp.multiply(self.D, self.D.dtype.type(1j * h))
-            self.xp.exp(P, out=P)
+            if self._nb:
+                P = np.empty_like(self.D)
+                self._k.exp_i(self.D, self.D.dtype.type(1j * h), P)
+            else:
+                P = self.xp.multiply(self.D, self.D.dtype.type(1j * h))
+                self.xp.exp(P, out=P)
             if self.cache_size > 0 and len(self._cache) >= self.cache_size:
                 self._cache.pop(next(iter(self._cache)))
         if self.cache_size > 0:
@@ -99,6 +126,8 @@ class UPPESolver:
         return out.astype(self.grid.dtype, copy=False)
 
     def _rk4(self, Aw, h):
+        if self._fused_rk4:
+            return self._rk4_fused(Aw, h)
         k = self.nonlinear(Aw, track=True)
         acc = k.copy()
         tmp = self.xp.empty_like(Aw)
@@ -113,8 +142,29 @@ class UPPESolver:
         Aw += acc
         return Aw
 
+    def _rk4_fused(self, Aw, h):
+        """Same RK4 as _rk4 with the Kerr term inlined: between the temporal FFTs, one fused
+        multithreaded pass per stage (Kerr product + peak; igamma, accumulation, next input)."""
+        F, ig = self.grid.fft, self._ig1
+        ct, rt = self.grid.dtype.type, self.grid.rdtype
+        acc, tmp = np.empty_like(Aw), np.empty_like(Aw)
+        src = Aw
+        for n, (c, w) in enumerate(((0.5, 1.0), (0.5, 2.0), (1.0, 2.0))):
+            A = F.ift_t(src)
+            peak = self._k.kerr_inplace(A)
+            if n == 0:
+                self._Ipeak = float(peak)
+            self._k.rk_stage(F.ft_t(A), ig, Aw, acc, tmp, ct(c * h), rt(w), n == 0)
+            src = tmp
+        A = F.ift_t(tmp)
+        self._k.kerr_inplace(A)
+        self._k.rk_final(F.ft_t(A), ig, Aw, acc, rt(h / 6))
+        return Aw
+
     def peak_intensity(self, Aw):
         A = self.grid.fft.ift_t(Aw)
+        if self._nb:
+            return float(self._k.peak_abs2(A))
         return float((A.real ** 2 + A.imag ** 2).max())
 
     # ------------------------------------------------------------ propagation

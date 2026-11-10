@@ -268,6 +268,29 @@ def _git_commit():
 
 
 # ====================================================================== simulation
+def _simulation_class():
+    import thunder4d as th
+
+    class BenchSimulation(th.LensFrameSimulation):
+        """LensFrameSimulation that also times the nonlinear propagation alone (prop_s), without the diagnostics."""
+
+        prop_s = 0.0
+
+        def _to_centre(self, Aw):
+            t = time.perf_counter()
+            out = super()._to_centre(Aw)
+            self.prop_s += time.perf_counter() - t
+            return out
+
+        def _to_mirror(self, Aw):
+            t = time.perf_counter()
+            out = super()._to_mirror(Aw)
+            self.prop_s += time.perf_counter() - t
+            return out
+
+    return BenchSimulation
+
+
 def _peak_intensity(h):
     """Exact peak intensity at the cell centre [W/m^2] per record (history["peak_intensity"]). Checkpoints
     written before thunder4d recorded it hold the first values as "I_peak" (former benchmark subclass)."""
@@ -363,7 +386,7 @@ class Benchmark:
             ok = need <= budget or args.preset is not None or args.quick
             print(f"  preset {p}: {g.Nx}x{g.Ny}x{g.Nt}, ~{need:.2f} GB" + ("  <- used" if ok else ""))
             if ok:
-                return th.suggest_lens_grid(cell, **ga, **p, device=args.device), p
+                return th.suggest_lens_grid(cell, **ga, **p, device=args.device, fft_backend=args.fft), p
         raise MemoryError("no preset fits the memory budget: add a coarser preset, raise "
                           "--budget-gb or force one with --preset")
 
@@ -509,6 +532,10 @@ class Benchmark:
 
         settings = {"phi_max": args.phi_max, "gouy_step": args.gouy_step, "quick": args.quick,
                     "n_passes": n_passes, "preset": ctx.preset, "record_every": args.record_every}
+        if args.kernels != "auto":   # forced kernels / FFT: own run directory (auto keeps the old fingerprint)
+            settings["kernels"] = args.kernels
+        if args.fft != "auto":
+            settings["fft"] = args.fft
         fp = json.dumps({"params": {k: str(v) for k, v in sorted(P.items())},
                          "settings": {k: str(v) for k, v in sorted(settings.items())}})
         run_id = f"{args.label or ('quick' if args.quick else 'run')}_{hashlib.md5(fp.encode()).hexdigest()[:8]}"
@@ -516,9 +543,11 @@ class Benchmark:
         os.makedirs(run_dir, exist_ok=True)
         print("run directory:", run_dir)
 
-        sim = th.LensFrameSimulation(pulse, ctx.cell, phi_max=args.phi_max, gouy_step=args.gouy_step,
-                                     mode_reference=ctx.mode_reference, near_field=True, record_mirror=True,
-                                     record_every=args.record_every)
+        Sim = _simulation_class()
+        sim = Sim(pulse, ctx.cell, phi_max=args.phi_max, gouy_step=args.gouy_step,
+                  mode_reference=ctx.mode_reference, near_field=True, record_mirror=True,
+                  record_every=args.record_every, kernels=args.kernels)
+        print(f"array kernels: {sim.solver.kernels}{_threads(sim.solver.kernels)}")
         ckpt = os.path.join(run_dir, "checkpoint.pkl")
         prev_wall = 0.0
         if not args.no_resume and os.path.exists(ckpt):
@@ -527,11 +556,16 @@ class Benchmark:
                 with open(os.path.join(run_dir, "results.json")) as f:
                     prev_wall = json.load(f)["run"].get("wall_s", 0.0)
             print(f"resumed at pass {sim.passes_done}")
-        t0 = time.time()
+        t0, steps0 = time.time(), sim.solver.nsteps
         if not sim.done:
             sim.run(max_seconds=args.max_seconds)
             sim.checkpoint(ckpt)
         wall = prev_wall + time.time() - t0
+        steps = sim.solver.nsteps - steps0          # this session only (a resumed run restores nsteps)
+        ms_per_step = 1e3 * sim.prop_s / steps if steps else None
+        if steps:
+            print(f"propagation {sim.prop_s:.1f} s for {steps} steps: {ms_per_step:.1f} ms/step "
+                  f"({sim.solver.kernels} kernels, {ctx.grid.fft.backend} FFT; wall {wall:.1f} s with the diagnostics)")
         ctx.sim, ctx.run_dir = sim, run_dir
 
         print("analysing ...")
@@ -551,6 +585,8 @@ class Benchmark:
             "run": {"id": run_id, "label": args.label, "date": datetime.datetime.now().isoformat(timespec="seconds"),
                     "thunder4d": th.__version__, "git": _git_commit(), "python": sys.version.split()[0],
                     "device": g.device, "fft": g.fft.backend, "solver": "LensFrameSimulation",
+                    "kernels": sim.solver.kernels, "cpu_count": os.cpu_count(),
+                    "propagation_s": sim.prop_s, "ms_per_step": ms_per_step,
                     "grid_shape": list(g.shape), "grid": g.describe(),
                     "dx_um": g.dx * 1e6, "dt_fs": g.dt / FS, "mirror_scale": sim.mirror_scale,
                     "finished": bool(sim.done), "passes_done": sim.passes_done, "wall_s": wall,
@@ -575,6 +611,14 @@ class Context:
 
     def __init__(self, **kw):
         self.__dict__.update(kw)
+
+
+def _threads(kernels):
+    """' (n threads)' for the Numba kernels, '' otherwise."""
+    if kernels != "numba":
+        return ""
+    import numba
+    return f" ({numba.get_num_threads()} threads)"
 
 
 def _budget_gb(args):
@@ -602,6 +646,10 @@ def parse_args(bench, argv=None):
     p.add_argument("--quick", action="store_true", help="few passes on a coarse grid: checks the script only")
     p.add_argument("--device", default="auto", choices=["auto", "cpu", "gpu"])
     p.add_argument("--gpu-id", default=None, help="CUDA device index (sets CUDA_VISIBLE_DEVICES)")
+    p.add_argument("--fft", default="auto", choices=["auto", "scipy", "fftw"],
+                   help="CPU FFT library (auto = scipy; fftw needs pyFFTW)")
+    p.add_argument("--kernels", default="auto", choices=["auto", "numba", "numpy"],
+                   help="CPU array kernels between the FFTs (auto: Numba if installed)")
     p.add_argument("--budget-gb", type=float, default=16.0, help="memory budget on the CPU")
     p.add_argument("--preset", type=int, default=None, help="force grid preset i (0 = finest)")
     p.add_argument("--phi-max", type=float, default=0.02, help="peak nonlinear phase per step")
