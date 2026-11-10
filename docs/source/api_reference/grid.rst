@@ -3,7 +3,7 @@ thunder4d.grid
 
 .. py:module:: thunder4d.grid
 
-Simulation grid and FFT conventions (see :doc:`../overview/conventions`).
+Simulation grid and FFT conventions (see :doc:`../quickstart`).
 
 .. py:data:: C0
 
@@ -92,7 +92,7 @@ FFT
 
 .. py:class:: FFT(backend="auto", workers=None, device="cpu")
 
-   Thin wrapper applying the conventions of :doc:`../overview/conventions`. With
+   Thin wrapper applying the conventions of :doc:`../quickstart`. With
    ``backend="fftw"``, 3D complex arrays (the solvers' fields) use planned FFTW transforms, one plan
    per shape, dtype and transform, made on first use with the effort ``FFT.fftw_effort``
    (``"FFTW_MEASURE"`` by default; ``"FFTW_ESTIMATE"`` plans instantly, ``"FFTW_PATIENT"`` searches

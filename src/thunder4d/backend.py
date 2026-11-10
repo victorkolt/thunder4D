@@ -7,7 +7,6 @@ import sys
 import numpy as np
 
 _GPU_OK = None
-_GPU_ERR = None
 _DLL_HANDLES = []          # keeps the added DLL directories alive
 
 
@@ -35,7 +34,7 @@ def _windows_nvidia_dlls():
 
 def gpu_available():
     """True if CuPy is installed and a working CUDA device can run an FFT, cuBLAS and a kernel."""
-    global _GPU_OK, _GPU_ERR
+    global _GPU_OK
     if _GPU_OK is None:
         try:
             _windows_nvidia_dlls()
@@ -48,16 +47,9 @@ def gpu_available():
             cp.vdot(a, a)                       # needs cuBLAS
             float(cp.sum(cp.abs(a) ** 2))       # compiles a kernel: fails on unsupported GPUs
             _GPU_OK = True
-        except Exception as e:                  # noqa: BLE001  any failure means no usable GPU
+        except Exception:                       # noqa: BLE001  any failure means no usable GPU
             _GPU_OK = False
-            _GPU_ERR = f"{type(e).__name__}: {e}"
     return _GPU_OK
-
-
-def gpu_error():
-    """Why the GPU is unavailable (None if it works)."""
-    gpu_available()
-    return _GPU_ERR
 
 
 def resolve_device(device="auto"):

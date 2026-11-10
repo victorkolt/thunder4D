@@ -73,3 +73,22 @@ field is listed in one error message.
 .. py:function:: run_input(cfg, verbose=True, max_seconds=None)
 
    :func:`build_simulation` then ``sim.run()``; returns the built object.
+
+.. py:function:: input_problems(cfg)
+
+   Every problem of a merged input, as a list of ``(path, message)``, where ``path`` is the key at
+   fault (``"cell.separation_m"``); empty when the input is valid. :func:`load_input` raises with
+   these messages.
+
+.. py:function:: describe_input(cfg)
+
+   Quick checks of an input before launching it, in milliseconds (neither the pulse nor the solver
+   is built): linear eigenmode (``w0_m``, ``w_mirror_m``, ``zR_m``, ``gouy_per_pass_rad``), grid size
+   (``grid_shape``, ``field_MB``), Gaussian estimates of the peak power, of ``p_over_pcr`` and of the
+   peak fluence on the mirrors (``mirror_fluence_J_cm2``).
+
+.. py:data:: FIELDS
+
+   How each key is shown and edited (label, displayed unit, kind of editor, help, conditions), as
+   ``{"block.key": Field}``. The GUI builder is generated from it, and a test checks that every key
+   of the input file has an entry: a new key gets its :class:`Field` in the same change.

@@ -141,3 +141,11 @@ def test_committed_reference_runs_are_complete():
             continue
         assert os.path.exists(os.path.join(path, "results.json")), d
         assert os.path.exists(os.path.join(path, "curves.npz")), f"{d}: curves.npz not committed"
+
+
+def test_peak_intensity_of_a_run_resumed_from_an_old_checkpoint():
+    """Old checkpoints hold the first records as I_peak; resume() fills peak_intensity with None there."""
+    fw = _load("framework")
+    h = {"I_peak": [3.0, 2.0], "peak_intensity": [None, None, 1.0, 0.5]}
+    np.testing.assert_array_equal(fw._peak_intensity(h), [3.0, 2.0, 1.0, 0.5])
+    np.testing.assert_array_equal(fw._peak_intensity({"peak_intensity": [1.0]}), [1.0])

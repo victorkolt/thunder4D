@@ -3,7 +3,7 @@ thunder4d.cell
 
 .. py:module:: thunder4d.cell
 
-The multipass cell. See :doc:`../overview/overview` for the unfolded picture, the
+The multipass cell. See :doc:`../user_guide/simulation` for the unfolded picture, the
 eigenmode and the nonlinear mode matching.
 
 .. py:class:: MPC(R, d, medium, n_passes, *, mirror_gdd_fs2=0.0, mirror_tod_fs3=0.0, mirror_reflectivity=1.0, mirror_phase=None, mirror_diameter=None)
@@ -40,9 +40,9 @@ eigenmode and the nonlinear mode matching.
 
       :returns: dict with ``w0``, ``w_mirror``, ``zR``, ``gouy_per_pass``
 
-   .. py:method:: nonlinear_mode(P, lam=None, verbose=False)
+   .. py:method:: nonlinear_mode(P, lam, verbose=False)
 
-      Kerr-matched eigenmode for power ``P`` [W]. Raises ``ValueError`` if
+      Kerr-matched eigenmode for power ``P`` [W] at wavelength ``lam`` [m]. Raises ``ValueError`` if
       :math:`P \ge P_c`.
 
       :returns: dict
@@ -61,11 +61,11 @@ eigenmode and the nonlinear mode matching.
          * - ``I_peak_center_W_cm2``
            - peak intensity at the waist [W/cm²]
 
-   .. py:method:: match(pulse, power="peak", verbose=True)
+   .. py:method:: match(pulse, power="peak", verbose=True, lam=None)
 
-      Same as :meth:`nonlinear_mode`, with the power taken from a
+      Same as :meth:`nonlinear_mode`, with the power and the wavelength taken from a
       :class:`~thunder4d.pulse.Pulse`: ``"peak"`` uses ``peak_power()``, ``"weighted"``
-      uses ``weighted_power()``. A number in W is also accepted.
+      uses ``weighted_power()``. A number in W is also accepted, with its wavelength ``lam``.
 
    .. py:method:: report(m=None)
 

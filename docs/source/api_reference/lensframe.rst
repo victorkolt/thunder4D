@@ -4,7 +4,7 @@ thunder4d.lensframe
 .. py:module:: thunder4d.lensframe
 
 Beam-following ("lens-frame") propagation: the grid expands with the cell eigenmode, so it only
-has to hold the beam at the waist scale. See :doc:`../overview/lens_frame` for the theory.
+has to hold the beam at the waist scale. See :doc:`../user_guide/lens_frame` for the theory.
 
 LensFrameSimulation
 -------------------

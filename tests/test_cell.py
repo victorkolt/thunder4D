@@ -107,3 +107,12 @@ def test_mirror_aperture_blocks_outside_the_diameter():
     i = int(np.argmin(np.abs(g.x - 140e-6)))
     assert F[0, 0] == pytest.approx(1.0)
     assert F[i, 0] < 1e-3
+
+
+def test_match_from_a_power_needs_its_wavelength(herriott):
+    """A power alone has no wavelength: the mode must not silently be the one at 1030 nm."""
+    P = 0.1 * AR.critical_power(800e-9)
+    with pytest.raises(ValueError, match="wavelength"):
+        herriott.match(P, verbose=False)
+    m = herriott.match(P, verbose=False, lam=800e-9)
+    assert m["w0_linear"] == pytest.approx(herriott.linear_mode(800e-9)["w0"])

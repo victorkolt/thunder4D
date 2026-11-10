@@ -79,3 +79,40 @@ def test_run_input_runs_and_starts_after_a_mirror():
     assert b.sim.solver.B > 0
     # the input recorded at pass 0 is the pulse given at the cell centre
     assert b.sim.history["energy"][0] == pytest.approx(1e-3, rel=1e-6)
+
+
+# ============================================================ field descriptions (GUI forms)
+def test_every_key_of_the_input_is_described():
+    from thunder4d.inputfile import BLOCKS, FIELDS, field_paths
+
+    assert set(field_paths()) == set(FIELDS)
+    assert {p.split(".")[0] if "." in p else "general" for p in FIELDS} == set(BLOCKS)
+    for path, field in FIELDS.items():
+        if field.show_if is not None:
+            assert field.show_if[0] in FIELDS, path
+
+
+def test_problems_point_at_described_keys():
+    from thunder4d.inputfile import FIELDS, input_problems
+
+    cfg = small_input(laser={"energy_J": None, "shape": "measured"}, cell={"separation_m": 3.0},
+                      beam={"injection": "waist"}, grid={"lambda_max_nm": 1000.0})
+    problems = input_problems(cfg)
+    assert {p for p, _ in problems} == {"laser.energy_J", "laser.spectrum", "cell.separation_m", "beam.w0_m",
+                                        "grid.lambda_min_nm"}
+    assert all(p in FIELDS for p, _ in problems)
+    assert input_problems(small_input()) == []
+
+
+def test_describe_input_without_building_the_pulse():
+    from thunder4d.inputfile import describe_input, make_cell, make_grid
+
+    cfg = th.load_input(small_input())
+    s = describe_input(cfg)
+    cell = make_cell(cfg)
+    assert s["w0_m"] == pytest.approx(cell.linear_mode(1030e-9)["w0"])
+    grid = make_grid(cfg, cell)
+    assert s["grid_shape"] == (grid.Nx, grid.Ny, grid.Nt)
+    assert s["peak_power_W"] == pytest.approx(0.9394 * 1e-3 / 200e-15, rel=1e-3)
+    assert s["p_over_pcr"] == pytest.approx(s["peak_power_W"] / cell.medium.critical_power(1030e-9))
+    assert s["path_length_m"] == pytest.approx(2 * 1.9)

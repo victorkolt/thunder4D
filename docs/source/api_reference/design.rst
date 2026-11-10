@@ -3,9 +3,9 @@ thunder4d.design
 
 .. py:module:: thunder4d.design
 
-The design helper (see :doc:`../design/design`). Everything below is importable from
-``thunder4d.design``; the sections name the submodule that defines it. Fields and defaults of the
-problem blocks are tabulated in :doc:`../design/problem`.
+The design helper (see :doc:`../user_guide/design`). Everything below is importable from
+``thunder4d.design``; the sections name the submodule that defines it. Every field of the problem
+blocks, with its default, is defined in :mod:`thunder4d.design.specs`.
 
 .. code-block:: python
 
@@ -135,7 +135,7 @@ Search
 
    .. py:method:: report(problem=None)
 
-      The text report of :doc:`../design/search`.
+      The text report of :doc:`../user_guide/design`.
 
    .. py:method:: tolerances(problem=None, lambda0_m=None)
 
@@ -153,7 +153,7 @@ Search
 
 .. py:class:: QuickResult(duration_fs, peak_power_W, throughput, main_peak_fraction=None, compressor_gdd_fs2=None, b_total_rad=None, b_per_pass_rad=None, p_over_pcr=None, peak_intensity_W_cm2=None, mirror_fluence_J_cm2=None, duration_per_bounce_fs=None, out_of_band_fraction=None, spectrum_nm=None, extras={})
 
-   What a quick solver returns (:doc:`../design/solvers`).
+   What a quick solver returns (:doc:`../user_guide/design`).
 
 .. py:class:: MPCDesigner(problem, quick=None, verbose=True, workers=None)
 
@@ -221,7 +221,7 @@ Quick solvers
 
 .. py:class:: Fast1DQuick(accuracy="fast", matching="linear", keep_spectrum=True, options={})
 
-   Quick solver backed by fast1d (:doc:`../design/solvers`).
+   Quick solver backed by fast1d (:doc:`../user_guide/design`).
 
    :param str accuracy: ``"fast"``, ``"default"`` or ``"fine"``
    :param str matching: ``"linear"`` or ``"nonlinear"`` injection
@@ -247,7 +247,7 @@ Quick solvers
 
 .. py:function:: design_map(problem, *, gas, roc_m, k=1, round_trips=None, branch="concentric", x=None, y=None, quick=None, coating=None, diameter_inch=None, pass_offset=0, workers=None)
 
-   Scan two parameters and find the limiting constraint at each point (:doc:`../design/maps`).
+   Scan two parameters and find the limiting constraint at each point (:doc:`../user_guide/design`).
 
    :param x: ``(name, values)``, default pressure from the pressure range
    :param y: ``(name, values)``, default round trips from the search space
@@ -343,7 +343,7 @@ From a design to the 4D solver
 .. py:function:: validate_4d(problem, cand, *, quick=None, preset="coarse", verbose=True, max_seconds=None, **to_input_kw)
 
    Run the design with the 4D lens-frame solver and compare it with fast1d
-   (:doc:`../design/validation_4d`). Returns a :class:`Validation4D`.
+   (:doc:`../user_guide/design`). Returns a :class:`Validation4D`.
 
 Catalogues
 ----------
