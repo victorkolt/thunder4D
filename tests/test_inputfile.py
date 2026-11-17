@@ -116,3 +116,66 @@ def test_describe_input_without_building_the_pulse():
     assert s["peak_power_W"] == pytest.approx(0.9394 * 1e-3 / 200e-15, rel=1e-3)
     assert s["p_over_pcr"] == pytest.approx(s["peak_power_W"] / cell.medium.critical_power(1030e-9))
     assert s["path_length_m"] == pytest.approx(2 * 1.9)
+
+
+# ============================================================ plates and gas regions (bulk and hybrid cells)
+WESTERBERG = {"roc_m": 0.2, "separation_m": 0.382, "n_passes": 14,
+              "plates": [{"material": "FS", "thickness_m": 1e-3, "position_m": 0.14},
+                         {"material": "FS", "thickness_m": 1e-3, "position_m": -0.14}],
+              "regions": [{"z0_m": -0.14, "z1_m": 0.14, "gas": "vacuum"}]}
+
+
+def hybrid_input(**cell):
+    cfg = small_input(medium={"gas": "air", "pressure_bar": 1.0}, cell={**WESTERBERG, **cell},
+                      grid={"lambda_min_nm": 880.0, "lambda_max_nm": 1220.0})
+    cfg["laser"].update(energy_J=100e-6, duration_fs=180.0)
+    return cfg
+
+
+def test_input_cell_is_the_cell_of_the_script():
+    from thunder4d.inputfile import cell_kind
+
+    cfg = th.load_input(hybrid_input())
+    cell = make_cell(cfg)
+    by_hand = th.MPC(0.2, 0.382, th.Material("air", 1.0, 293.15), 14, wavelength=1030e-9,
+                     plates=[th.Plate(th.Solid("FS"), 1e-3, 0.14, coating="ar"),
+                             th.Plate(th.Solid("FS"), 1e-3, -0.14, coating="ar")],
+                     regions=[(-0.14, 0.14, th.vacuum())])
+    assert cell.equivalent_separation() == pytest.approx(by_hand.equivalent_separation())
+    assert [p.position for p in cell.plates] == [-0.14, 0.14]
+    assert cell_kind(cfg) == "hybrid"
+    bulk = th.load_input(hybrid_input()) | {"medium": {**cfg["medium"], "gas": "vacuum", "pressure_bar": None}}
+    assert cell_kind(bulk) == "bulk" and make_cell(bulk).medium.n2 == 0
+    assert cell_kind(th.load_input(small_input())) == "gas"
+
+
+def test_plate_and_region_problems_are_listed():
+    from thunder4d.inputfile import input_problems
+
+    cfg = th.load_input(hybrid_input())
+    cfg["cell"]["plates"] = [{"material": "glass", "thickness_m": -1.0, "position_m": 0.0, "coating_a": "x"}]
+    cfg["cell"]["regions"] = [{"z0_m": 0.1, "z1_m": 0.0}, {"z0_m": 0.0, "z1_m": 0.1, "gas": "Ar"}]
+    text = "\n".join(msg for path, msg in input_problems(cfg))
+    for part in ("unknown material", "thickness_m must be > 0", "coating_a", "need z0_m < z1_m",
+                 "pressure_bar is required"):
+        assert part in text
+
+
+def test_vacuum_needs_no_pressure_and_roundtrips(tmp_path):
+    cfg = hybrid_input()
+    cfg["medium"].update(gas="vacuum", pressure_bar=None)
+    cfg["cell"]["regions"] = []
+    th.save_input(cfg, tmp_path / "bulk.json")
+    assert th.load_input(tmp_path / "bulk.json")["cell"]["plates"][0]["material"] == "FS"
+
+
+def test_hybrid_input_runs_and_describes_the_plates():
+    from thunder4d.inputfile import describe_input
+
+    cfg = hybrid_input()
+    cfg["grid"]["preset"] = "coarse"
+    d = describe_input(cfg)
+    assert d["kind"] == "hybrid" and len(d["plates_p_over_pcr"]) == 2 and d["plates_p_over_pcr"][0] > 50
+    b = th.build_simulation(cfg)
+    b.sim.run(verbose=False)
+    assert 0.9 < b.sim.history["energy"][-1] / b.sim.history["energy"][0] < 1.0

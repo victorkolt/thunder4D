@@ -100,7 +100,11 @@ class BuilderPanel(QtWidgets.QWidget):
                 continue
             label = QtWidgets.QLabel(field.label)
             label.setToolTip(field.help or path)
-            forms[block_of(path)].addRow(label, editor)
+            if field.kind == "records":                  # a table needs the whole width: caption above it
+                forms[block_of(path)].addRow(label)
+                forms[block_of(path)].addRow(editor)
+            else:
+                forms[block_of(path)].addRow(label, editor)
             self.rows[path] = (forms[block_of(path)], editor)
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -209,9 +213,12 @@ class BuilderPanel(QtWidgets.QWidget):
             ("Beam radius on the mirrors", f"{s['w_mirror_m'] * 1e3:.3g} mm"),
             ("Rayleigh length", f"{s['zR_m'] * 1e2:.3g} cm"),
             ("Gouy phase per pass", f"{s['gouy_per_pass_rad']:.4g} rad"),
+            ("Cell type", {"gas": "Gas-filled", "bulk": "Bulk", "hybrid": "Hybrid"}[s["kind"]]),
             ("Path length in the cell", f"{s['path_length_m']:.3g} m"),
             ("Peak power (Gaussian)", f"{s['peak_power_W'] / 1e9:.3g} GW"),
             ("P / P<sub>cr</sub>", f"{s['p_over_pcr']:.3g}"),
+            *([("P / P<sub>cr</sub> in the plates", f"{max(s['plates_p_over_pcr']):.3g}")]
+              if s["plates_p_over_pcr"] else []),
             ("Peak fluence on the mirrors", f"{s['mirror_fluence_J_cm2'] * 1e3:.3g} mJ/cm²"),
             ("Grid", f"{nx} × {ny} × {nt} ({s['field_MB']:.3g} MB per field)"),
         ]

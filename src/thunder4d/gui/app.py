@@ -7,6 +7,7 @@ import sys
 import traceback
 from importlib.metadata import version
 from pathlib import Path
+from typing import Any
 
 from . import (
     panels as _builtin_panels,  # noqa: F401  (registers the built-in panels)
@@ -93,7 +94,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def open_path(self, kind: str, path: str) -> None:
         """kind: input (simulation builder), problem (design helper) or results (viewer)."""
         key = {"input": "builder", "problem": "design", "results": "results"}[kind]
-        panel = self.panels.get(key)
+        panel: Any = self.panels.get(key)
         if panel is None:
             return
         if kind == "input" and not panel.confirm_discard():

@@ -209,7 +209,7 @@ class ResultsPanel(QtWidgets.QWidget):
         self.auto = [{"x": a.get_xlim(), "y": a.get_ylim(), "xlog": a.get_xscale() == "log",
                       "ylog": a.get_yscale() == "log"} for a in self.axes]
         for i, ax in enumerate(self.axes):
-            ov = self.view.get((plot.key, i), {})
+            ov = self.view.get((plot.key, i), {}) if plot is not None else {}
             for axis in "xy":
                 if ov.get(f"{axis}log") is not None:
                     getattr(ax, f"set_{axis}scale")("log" if ov[f"{axis}log"] else "linear")
@@ -249,7 +249,9 @@ class ResultsPanel(QtWidgets.QWidget):
         self.auto_button.setEnabled(on)
 
     def _current_view(self) -> dict[str, Any]:
-        return self.view.setdefault((self.current_plot().key, self.axis_box.currentIndex()), {})
+        plot = self.current_plot()
+        assert plot is not None
+        return self.view.setdefault((plot.key, self.axis_box.currentIndex()), {})
 
     def _tidy_view(self) -> None:
         for key in [k for k, ov in self.view.items() if all(v is None for v in ov.values())]:

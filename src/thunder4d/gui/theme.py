@@ -62,6 +62,12 @@ QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; }}
 """
 
 
+def _app() -> QtWidgets.QApplication:
+    app = QtWidgets.QApplication.instance()
+    assert isinstance(app, QtWidgets.QApplication), "create the QApplication first"
+    return app
+
+
 def palette(t: Theme) -> QtGui.QPalette:
     p = QtGui.QPalette()
     Role, Group = QtGui.QPalette.ColorRole, QtGui.QPalette.ColorGroup
@@ -89,7 +95,7 @@ def apply(name: str) -> str:
     """Apply a theme to the running application (unknown name: the default). Returns the name used."""
     name = name if name in THEMES else DEFAULT
     t = THEMES[name]
-    app = QtWidgets.QApplication.instance()
+    app = _app()
     app.setStyle("Fusion")
     app.setPalette(palette(t))
     app.setStyleSheet(STYLE.format(**t.__dict__))
@@ -108,7 +114,7 @@ _base_size: list[float] = []
 
 
 def apply_text_size(delta: int) -> None:
-    app = QtWidgets.QApplication.instance()
+    app = _app()
     if not _base_size:
         _base_size.append(app.font().pointSizeF())
     font = app.font()
@@ -118,7 +124,7 @@ def apply_text_size(delta: int) -> None:
 
 def saved_text_size() -> int:
     try:
-        return int(QtCore.QSettings("thunder4d", "gui").value("text_size", 0))
+        return int(str(QtCore.QSettings("thunder4d", "gui").value("text_size", 0)))
     except (TypeError, ValueError):
         return 0
 

@@ -202,3 +202,29 @@ def test_input_from_another_panel_asks_before_replacing_edits(qtbot, builder, mo
     answers.clear()
     builder.session.set_config(small_input(medium={"gas": "Kr", "pressure_bar": 1.0}))   # next design
     assert not answers and builder.editors["medium.gas"].value() == "Kr"                # no edit: no question
+
+
+# ============================================================ plates and gas regions
+def test_plates_table_edits_the_input(builder):
+    plates = builder.editors["cell.plates"]
+    builder.load_config(small_input(), None)
+    assert plates.value() == []
+    plates.add_row()
+    builder.refresh()
+    assert any("thickness_m must be > 0" in msg for _, msg in builder.problems)        # a new plate is not valid yet
+    plates.grid.item(0, 1).setText("1")                                                # t [mm]
+    plates.grid.item(0, 2).setText("140")                                              # z [mm]
+    builder.refresh()
+    assert builder.cfg["cell"]["plates"] == [{"material": "FS", "thickness_m": 1e-3, "position_m": 0.14,
+                                              "coating_a": "ar", "coating_b": "ar", "n2": None}]
+    assert not any(p == "cell.plates" for p, _ in builder.problems)
+    plates.remove_rows()
+    assert builder.cfg["cell"]["plates"] == []
+
+
+def test_hybrid_input_is_shown_and_summarised(builder):
+    from test_inputfile import hybrid_input
+
+    builder.load_config(hybrid_input(), None)
+    assert builder.editors["cell.plates"].grid.rowCount() == 2 and builder.editors["cell.regions"].grid.rowCount() == 1
+    assert builder.valid and "Hybrid" in builder.status.text() and "in the plates" in builder.status.text()

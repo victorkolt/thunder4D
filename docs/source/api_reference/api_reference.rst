@@ -9,7 +9,8 @@ Everything useful is available at package level:
    from thunder4d import diagnostics as dg
 
    m.Grid, m.suggest_grid, m.C0, m.gpu_available, m.to_host
-   m.Material
+   m.Material, m.Solid, m.vacuum, m.SOLIDS
+   m.Plate, m.Coating
    m.Pulse, m.Beam, m.gaussian, m.super_gaussian, m.top_hat, m.knife_edge,
    m.measured_profile, m.gaussian_spectrum, m.measured_spectrum,
    m.spectrum_from_temporal_field, m.add_spectral_phase, m.zernike_wavefront
@@ -34,6 +35,8 @@ the optional sub-package ``thunder4d.gui``.
      - spectra, spatial profiles, aberrations, space-time couplings, pulse builders
    * - :doc:`cell`
      - cell geometry, eigenmodes, nonlinear mode matching, mirrors
+   * - :doc:`plates`
+     - solid plates and their coatings (bulk and hybrid cells)
    * - :doc:`solver`
      - UPPE propagator
    * - :doc:`simulation`
@@ -56,6 +59,7 @@ the optional sub-package ``thunder4d.gui``.
    materials
    pulse
    cell
+   plates
    solver
    simulation
    lensframe

@@ -354,6 +354,99 @@ class TableEditor(FieldEditor):
         self.set_table(None)
 
 
+class RecordsEditor(FieldEditor):
+    """A list of dicts (the plates, the gas regions): one row per item, one column per key of Field.record."""
+
+    def make_input(self) -> QtWidgets.QWidget:
+        box = QtWidgets.QWidget()
+        column = QtWidgets.QVBoxLayout(box)
+        column.setContentsMargins(0, 0, 0, 0)
+        self.columns = self.field.record
+        self.grid = QtWidgets.QTableWidget(0, len(self.columns))
+        self.grid.setHorizontalHeaderLabels([c.label + (f" [{c.unit}]" if c.unit else "") for c in self.columns])
+        self.grid.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        for i, col in enumerate(self.columns):
+            header = self.grid.horizontalHeaderItem(i)
+            assert header is not None
+            header.setToolTip(col.help)
+        self.grid.itemChanged.connect(lambda _: self.changed.emit())
+        buttons = QtWidgets.QHBoxLayout()
+        for text, slot in (("Add", self.add_row), ("Remove", self.remove_rows)):
+            button = QtWidgets.QPushButton(text)
+            button.clicked.connect(slot)
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        column.addWidget(self.grid)
+        column.addLayout(buttons)
+        self._fit()
+        return box
+
+    def _fit(self) -> None:
+        rows = max(self.grid.rowCount(), 2)
+        row_height = self.grid.verticalHeader().defaultSectionSize()
+        self.grid.setFixedHeight(self.grid.horizontalHeader().height() + rows * row_height + 6)
+
+    def _append(self, item: dict[str, Any]) -> None:
+        self.grid.blockSignals(True)                      # the row is complete before anyone reads it
+        r = self.grid.rowCount()
+        self.grid.insertRow(r)
+        for c, col in enumerate(self.columns):
+            value = item.get(col.key, col.default)
+            if col.kind == "choice":
+                combo = QtWidgets.QComboBox()
+                combo.addItems([str(x) for x in col.choices])
+                combo.setCurrentText(str(value))
+                combo.currentTextChanged.connect(lambda _: self.changed.emit())
+                self.grid.setCellWidget(r, c, combo)
+            else:
+                text = "" if value is None else format_number(value / col.scale)
+                self.grid.setItem(r, c, QtWidgets.QTableWidgetItem(text))
+        self.grid.blockSignals(False)
+        self._fit()
+
+    def add_row(self) -> None:
+        self._append({})
+        self.changed.emit()
+
+    def remove_rows(self) -> None:
+        rows = sorted({i.row() for i in self.grid.selectedIndexes()}, reverse=True) or [self.grid.rowCount() - 1]
+        for r in rows:
+            if r >= 0:
+                self.grid.removeRow(r)
+        self._fit()
+        self.changed.emit()
+
+    def value(self) -> list[dict[str, Any]]:
+        items = []
+        for r in range(self.grid.rowCount()):
+            item: dict[str, Any] = {}
+            for c, col in enumerate(self.columns):
+                if col.kind == "choice":
+                    combo = self.grid.cellWidget(r, c)
+                    assert isinstance(combo, QtWidgets.QComboBox)
+                    item[col.key] = combo.currentText()
+                    continue
+                cell = self.grid.item(r, c)
+                text = cell.text().strip() if cell is not None else ""
+                try:
+                    item[col.key] = float(text.replace(",", ".")) * col.scale if text else None
+                except ValueError:
+                    raise ValueError(f"row {r + 1}, {col.label}: {text!r} is not a number") from None
+            items.append(item)
+        return items
+
+    def set_value(self, value: Any) -> None:
+        self.grid.blockSignals(True)
+        self.grid.setRowCount(0)
+        for item in value or []:
+            self._append(item)
+        self.grid.blockSignals(False)
+
+    def set_problem(self, message: str | None) -> None:
+        self.grid.setStyleSheet(ERROR_STYLE if message else "")
+        self.setToolTip(message or self.field.help)
+
+
 class FloatOrTableEditor(FieldEditor):
     """A constant, or a table versus wavelength."""
 
@@ -472,6 +565,7 @@ EDITORS: dict[str, type[FieldEditor]] = {
     "float": FloatEditor, "int": IntEditor, "bool": BoolEditor, "choice": ChoiceEditor, "text": TextEditor,
     "multiline": MultilineEditor, "info": InfoEditor, "table": TableEditor, "float_or_table": FloatOrTableEditor,
     "hidden": HiddenEditor, "float_list": FloatListEditor, "multichoice": MultiChoiceEditor,
+    "records": RecordsEditor,
 }
 
 

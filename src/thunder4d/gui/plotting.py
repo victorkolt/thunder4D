@@ -52,7 +52,7 @@ class FigureWidget(QtWidgets.QWidget):
             for spine in ax.spines.values():
                 spine.set_edgecolor(c["edge"])
             ax.tick_params(which="both", color=c["edge"], labelcolor=c["text"])
-            for label in (ax.xaxis.label, ax.yaxis.label, ax.title, ax._left_title, ax._right_title):
+            for label in (ax.xaxis.label, ax.yaxis.label, ax.title):
                 label.set_color(c["text"])
             legend = ax.get_legend()
             if legend is not None:
@@ -77,5 +77,5 @@ class FigureWidget(QtWidgets.QWidget):
     def copy_to_clipboard(self) -> None:
         buffer = io.BytesIO()
         self.save(buffer, dpi=150, format="png")
-        image = QtGui.QImage.fromData(buffer.getvalue(), "PNG")
+        image = QtGui.QImage.fromData(buffer.getvalue())
         QtWidgets.QApplication.clipboard().setImage(image)

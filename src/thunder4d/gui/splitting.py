@@ -1,7 +1,7 @@
 """A splitter whose first pane keeps the same share of the width on any screen."""
 from __future__ import annotations
 
-from ._qt import QtCore, QtWidgets
+from ._qt import QtCore, QtGui, QtWidgets
 
 
 class RatioSplitter(QtWidgets.QSplitter):
@@ -14,9 +14,11 @@ class RatioSplitter(QtWidgets.QSplitter):
         self.dragged = False
         self.splitterMoved.connect(lambda *_: setattr(self, "dragged", True))
 
-    def resizeEvent(self, event: object) -> None:
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
         super().resizeEvent(event)
-        if not self.dragged and self.orientation() == QtCore.Qt.Orientation.Horizontal and self.count() == 2:
+        pane = self.widget(0)
+        if pane is not None and not self.dragged and self.orientation() == QtCore.Qt.Orientation.Horizontal \
+                and self.count() == 2:
             total = self.width()
-            first = min(max(int(total * self.ratio), self.widget(0).minimumWidth()), total)
+            first = min(max(int(total * self.ratio), pane.minimumWidth()), total)
             self.setSizes([first, total - first])

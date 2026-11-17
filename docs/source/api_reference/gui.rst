@@ -30,10 +30,11 @@ Registries
    ``session.show_panel(key)`` brings another tab to the front. A panel with a ``can_close()`` method is
    asked before the window closes.
 
-.. py:class:: PlotSpec(key, title, draw, requires=(), order=100.0, group="", per_pass=False, data=None)
+.. py:class:: PlotSpec(key, title, draw, requires=(), order=100.0, group="", per_pass=False, db=False, data=None)
 
    A figure of the results viewer. ``draw(results, fig, options)`` fills a matplotlib ``Figure``;
-   ``options["index"]`` is the selected record when ``per_pass``. Offered only when every key of
+   ``options["index"]`` is the selected record when ``per_pass``, and ``options["db"]`` says whether the colour
+   maps are shown in dB when ``db`` (a *dB* box is then enabled in the viewer). Offered only when every key of
    ``requires`` is in the results. ``data(results, options)`` returns the arrays written by *Export data*
    (default: the ``requires`` arrays).
 
@@ -59,3 +60,14 @@ Results and background tasks
    ``work(task)`` run on a background thread (a ``QThread``). Signals: ``output`` (each printed line),
    ``progress`` (``task.report(value)``), ``succeeded(result)``, ``failed(traceback)``, ``cancelled``.
    ``task.cancel()`` makes the next ``task.check()`` raise ``Cancelled``.
+   ``thunder4d.gui.worker.notify_done(widget, message)`` flashes the window in the task bar and writes the
+   message in the status bar: call it when a long task is over.
+
+Look
+----
+
+.. py:data:: thunder4d.gui.theme.THEMES
+
+   The colour themes of *View > Theme*, ``{name: Theme}``. A :class:`Theme` is six colours (window, base, text,
+   muted, border, accent). Adding one is adding an entry: the palette, the style sheet and the matplotlib
+   colours of the figures are built from it. ``thunder4d.gui.theme.DEFAULT`` is the name of the default theme.

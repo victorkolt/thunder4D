@@ -67,6 +67,9 @@ DEFAULTS: dict[str, Any] = {
         "separation_m": None,             # required
         "n_passes": None,                 # required
         "herriott": None,                 # optional, information: {"round_trips", "k", "branch"}
+        "wavelength_nm": None,            # reference wavelength of a cell with plates / regions; None = laser
+        "plates": [],                     # bulk / hybrid: [{"material", "thickness_m", "position_m", ...}], see PLATE
+        "regions": [],                    # gas regions: [{"z0_m", "z1_m", "gas", ...}], see REGION
     },
     "mirrors": {
         "reflectivity": 1.0,              # scalar or {"wavelength_nm": [...], "value": [...]}
@@ -100,6 +103,12 @@ DEFAULTS: dict[str, Any] = {
     "design": None,                       # free-form: provenance written by the design helper
 }
 
+# Items of cell.plates and cell.regions. Positions are along the cell axis from the centre, positive towards
+# the mirror hit at the end of pass 1 (thunder4d.plates). A coating is "bare" (Fresnel) or "ar" (R = 0).
+PLATE = {"material": "FS", "thickness_m": None, "position_m": 0.0, "coating_a": "ar", "coating_b": "ar", "n2": None}
+REGION = {"z0_m": None, "z1_m": None, "gas": "vacuum", "pressure_bar": None, "temperature_K": 293.15}
+COATINGS = ("bare", "ar")
+
 REQUIRED = [("laser", "energy_J"), ("laser", "duration_fs"), ("medium", "gas"), ("medium", "pressure_bar"),
             ("cell", "roc_m"), ("cell", "separation_m"), ("cell", "n_passes"),
             ("grid", "lambda_min_nm"), ("grid", "lambda_max_nm")]
@@ -107,6 +116,20 @@ FREE_FORM = ("design", "notes")
 
 
 # ============================================================ field descriptions
+@dataclass(frozen=True)
+class Column:
+    """One key of the items of a "records" field (a list of dicts, e.g. the plates), shown as a table column."""
+    key: str
+    label: str
+    kind: str = "float"            # float | choice
+    unit: str = ""
+    scale: float = 1.0
+    choices: tuple = ()
+    optional: bool = False
+    default: Any = None            # value of the column in a new row
+    help: str = ""
+
+
 @dataclass(frozen=True)
 class Field:
     """How one key of the input file is shown and edited (GUI forms, documentation).
@@ -121,6 +144,7 @@ class Field:
           hidden: kept as is, not shown.
     optional: None is allowed and means `none_text` (e.g. "from the preset"); required keys are in REQUIRED.
     show_if: (path, values): shown only when the key at `path` has one of `values`.
+    record: for kind "records" (a list of dicts): the columns of the table, one per key of an item.
     """
     label: str
     kind: str = "float"
@@ -133,6 +157,7 @@ class Field:
     help: str = ""
     show_if: tuple[str, tuple] | None = None
     advanced: bool = False
+    record: tuple[Column, ...] = ()
 
 
 # Sections of the input, in display order ("general" = the top-level keys).
@@ -140,9 +165,34 @@ BLOCKS = {"general": "General", "laser": "Laser", "beam": "Beam injection", "med
           "mirrors": "Mirrors", "grid": "Grid", "solver": "Solver", "run": "Run"}
 
 
+def _solids():
+    from .materials import SOLIDS
+    return tuple(SOLIDS)
+
+
 def _gases():
     from .materials import SELLMEIER
-    return tuple(SELLMEIER)
+    return (*SELLMEIER, "vacuum")
+
+
+_PLATE_COLUMNS = (
+    Column("material", "Material", "choice", choices=tuple(_solids()), default="FS", help="Solid of the plate."),
+    Column("thickness_m", "t", unit="mm", scale=1e-3, help="Thickness of the plate."),
+    Column("position_m", "z", unit="mm", scale=1e-3, default=0.0,
+           help="Position of the plate centre from the cell centre, positive towards the mirror hit at the end "
+                "of pass 1."),
+    Column("coating_a", "Face A", "choice", choices=COATINGS, default="ar",
+           help="Coating of the face that looks at the first mirror. bare: Fresnel reflection. ar: no reflection."),
+    Column("coating_b", "Face B", "choice", choices=COATINGS, default="ar", help="Coating of the other face."),
+    Column("n2", "n₂", optional=True, help="Kerr index in m²/W. Empty: the table value of the material."),
+)
+_REGION_COLUMNS = (
+    Column("z0_m", "z₀", unit="mm", scale=1e-3, help="Start of the region, from the cell centre."),
+    Column("z1_m", "z₁", unit="mm", scale=1e-3, help="End of the region, from the cell centre."),
+    Column("gas", "Gas", "choice", choices=_gases(), default="vacuum", help="Gas of the region, or vacuum."),
+    Column("pressure_bar", "p", unit="bar", optional=True, help="Pressure. Not needed for vacuum."),
+    Column("temperature_K", "T", unit="K", default=293.15, help="Temperature."),
+)
 
 
 # Every key of DEFAULTS is described here (tests/test_inputfile.py checks it): a new key of the input file
@@ -181,6 +231,14 @@ FIELDS: dict[str, Field] = {
     "cell.roc_m": Field("Mirror radius of curvature", unit="m", help="Radius of curvature of the two cavity mirrors."),
     "cell.separation_m": Field("Mirror separation", unit="m", help="Distance between the two mirrors."),
     "cell.n_passes": Field("Number of passes", "int", help="One pass = transit over the separation + bounce."),
+    "cell.wavelength_nm": Field("Reference wavelength", unit="nm", optional=True, none_text="= laser wavelength",
+                                help="Reference wavelength of a cell with plates or gas regions."),
+    "cell.plates": Field("Plates", "records", record=_PLATE_COLUMNS,
+                         help="Solid plates at normal incidence, crossed once per pass (bulk and hybrid cells). "
+                              "Position: from the cell centre, positive towards the mirror hit at the end of pass 1."),
+    "cell.regions": Field("Gas regions", "records", record=_REGION_COLUMNS,
+                          help="Parts of the cell filled with another gas than the one above (vacuum between two "
+                               "window plates, for example). Same positions as the plates."),
     "cell.herriott": Field("Herriott pattern", "info", optional=True,
                             help="Information: round trips, index k and branch, written by the design helper."),
     # mirrors
@@ -294,10 +352,12 @@ def input_problems(cfg):
     if cfg.get("version", 0) > SCHEMA_VERSION:
         errors.append(("version", f"file version {cfg['version']} is newer than this thunder4d ({SCHEMA_VERSION})"))
     for block, key in REQUIRED:
-        if cfg[block].get(key) is None:
+        if cfg[block].get(key) is None and not (key == "pressure_bar" and cfg["medium"]["gas"] == "vacuum"):
             errors.append((f"{block}.{key}", f"{block}.{key} is required"))
     c = cfg["cell"]
-    if c["roc_m"] and c["separation_m"] and not 0 < c["separation_m"] < 2 * c["roc_m"]:
+    errors += _segment_problems(cfg)
+    if c["roc_m"] and c["separation_m"] and not c["plates"] and not c["regions"] \
+            and not 0 < c["separation_m"] < 2 * c["roc_m"]:
         errors.append(("cell.separation_m", "cell: unstable, need 0 < separation_m < 2 roc_m"))
     if c["n_passes"] is not None and int(c["n_passes"]) < 1:
         errors.append(("cell.n_passes", "cell.n_passes must be >= 1"))
@@ -323,6 +383,43 @@ def input_problems(cfg):
         t = cfg["mirrors"][key]
         if isinstance(t, dict) and not {"wavelength_nm", "value"} <= set(t):
             errors.append((f"mirrors.{key}", f"mirrors.{key}: a table needs 'wavelength_nm' and 'value'"))
+    return errors
+
+
+def _segment_problems(cfg):
+    """Problems of cell.plates and cell.regions (a plate or a region at fault is named by its number)."""
+    from .materials import SOLID_ALIASES, SOLIDS
+
+    errors = []
+    for i, plate in enumerate(cfg["cell"]["plates"], 1):
+        where = f"plate {i}"
+        if not isinstance(plate, dict) or set(plate) - set(PLATE):
+            errors.append(("cell.plates", f"cell.plates: {where} must be a dict with the keys {list(PLATE)}"))
+            continue
+        plate = {**PLATE, **plate}
+        if plate["material"] not in SOLIDS and plate["material"] not in SOLID_ALIASES:
+            errors.append(("cell.plates", f"cell.plates: {where}: unknown material {plate['material']!r}"))
+        if not plate["thickness_m"] or float(plate["thickness_m"]) <= 0:
+            errors.append(("cell.plates", f"cell.plates: {where}: thickness_m must be > 0"))
+        if plate["position_m"] is None:
+            errors.append(("cell.plates", f"cell.plates: {where}: position_m is required"))
+        for face in ("coating_a", "coating_b"):
+            if plate[face] not in COATINGS:
+                errors.append(("cell.plates", f"cell.plates: {where}: {face} must be one of {list(COATINGS)}"))
+        if plate["n2"] is not None and float(plate["n2"]) <= 0:
+            errors.append(("cell.plates", f"cell.plates: {where}: n2 must be > 0"))
+    for i, region in enumerate(cfg["cell"]["regions"], 1):
+        where = f"region {i}"
+        if not isinstance(region, dict) or set(region) - set(REGION):
+            errors.append(("cell.regions", f"cell.regions: {where} must be a dict with the keys {list(REGION)}"))
+            continue
+        region = {**REGION, **region}
+        if region["z0_m"] is None or region["z1_m"] is None or not float(region["z0_m"]) < float(region["z1_m"]):
+            errors.append(("cell.regions", f"cell.regions: {where}: need z0_m < z1_m"))
+        if region["gas"] not in _gases():
+            errors.append(("cell.regions", f"cell.regions: {where}: unknown gas {region['gas']!r}"))
+        elif region["gas"] != "vacuum" and not region["pressure_bar"]:
+            errors.append(("cell.regions", f"cell.regions: {where}: pressure_bar is required for a gas"))
     return errors
 
 
@@ -395,15 +492,42 @@ def _mirror_kwargs(cfg, lambda0_m):
     return kw
 
 
+def _gas(name, pressure_bar, temperature_K, n2_1bar=None):
+    from .materials import Material, vacuum
+
+    if name == "vacuum":
+        return vacuum()
+    kw = {} if n2_1bar is None else {"n2_1bar": n2_1bar}
+    return Material(name, pressure_bar, temperature_K, **kw)
+
+
+def cell_kind(cfg):
+    """"gas" (no plates), "bulk" (plates, nothing but vacuum around them) or "hybrid" (plates and a gas)."""
+    c = cfg["cell"]
+    if not c["plates"]:
+        return "gas"
+    gases = [cfg["medium"]["gas"]] + [r.get("gas", "vacuum") for r in c["regions"]]
+    return "bulk" if all(g == "vacuum" for g in gases) else "hybrid"
+
+
 def make_cell(cfg):
     from .cell import MPC
-    from .materials import Material
+    from .materials import Solid
+    from .plates import Plate
 
     md, c = cfg["medium"], cfg["cell"]
-    kw = {} if md["n2_1bar"] is None else {"n2_1bar": md["n2_1bar"]}
-    gas = Material(md["gas"], md["pressure_bar"], md["temperature_K"], **kw)
+    gas = _gas(md["gas"], md["pressure_bar"], md["temperature_K"], md["n2_1bar"])
     lam0 = cfg["laser"]["wavelength_nm"] * 1e-9
-    return MPC(c["roc_m"], c["separation_m"], gas, int(c["n_passes"]), **_mirror_kwargs(cfg, lam0))
+    plates = [Plate(Solid(p["material"], n2=p.get("n2")), p["thickness_m"], p["position_m"],
+                    coating=(p.get("coating_a", "ar"), p.get("coating_b", "ar")))
+              for p in c["plates"]]
+    regions = [(r["z0_m"], r["z1_m"], _gas(r.get("gas", "vacuum"), r.get("pressure_bar"),
+                                           r.get("temperature_K", 293.15))) for r in c["regions"]]
+    extra = {}
+    if plates or regions:
+        lam_ref = (c["wavelength_nm"] or cfg["laser"]["wavelength_nm"]) * 1e-9
+        extra = {"plates": plates, "regions": regions, "wavelength": lam_ref}
+    return MPC(c["roc_m"], c["separation_m"], gas, int(c["n_passes"]), **extra, **_mirror_kwargs(cfg, lam0))
 
 
 def grid_settings(cfg):
@@ -450,6 +574,10 @@ def make_pulse(cfg, grid, cell):
         return w * np.sqrt(grid.lambda0 / lam0)
 
     w0 = cell.linear_mode(lam0)["w0"]
+    if cell.segmented and beam["injection"] != "waist":      # plates: the matched beam is given at the cell input
+        pulse = Pulse.cell_matched(grid, E, cell, las["energy_J"], nonlinear=beam["injection"] == "nonlinear",
+                                   power="weighted", verbose=False)
+        return pulse, w0 * np.sqrt(grid.lambda0 / lam0)
     if beam["injection"] == "nonlinear":
         probe = Pulse.at_focus(grid, E, Beam(gaussian(at_grid(w0))), las["energy_J"])
         w0 = cell.nonlinear_mode(probe.peak_power(), lam0)["w0"]
@@ -474,11 +602,13 @@ def describe_input(cfg):
     from .design.specs import PEAK_POWER_FACTOR
 
     peak_power = PEAK_POWER_FACTOR["gaussian"] * las["energy_J"] / input_duration_s(las)
-    critical = float(cell.medium.critical_power(lam0))
+    critical = float(cell.medium.critical_power(lam0)) if cell.medium.n2 else np.inf
     n_bytes = np.prod(grid.shape) * grid.dtype.itemsize
     return {"w0_m": float(mode["w0"]), "w_mirror_m": float(mode["w_mirror"]), "zR_m": float(mode["zR"]),
             "gouy_per_pass_rad": float(mode["gouy_per_pass"]), "path_length_m": cell.d * cell.n_passes,
             "peak_power_W": float(peak_power), "critical_power_W": critical, "p_over_pcr": float(peak_power / critical),
+            "kind": cell_kind(cfg), "plates_p_over_pcr": [float(peak_power / p.material.critical_power(lam0))
+                                                          for p in cell.plates],
             "mirror_fluence_J_cm2": float(2 * las["energy_J"] / (np.pi * mode["w_mirror"] ** 2) * 1e-4),
             "grid_shape": (grid.Nx, grid.Ny, grid.Nt), "field_MB": float(n_bytes / 1e6), "grid": grid.describe()}
 

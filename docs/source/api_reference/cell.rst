@@ -6,13 +6,13 @@ thunder4d.cell
 The multipass cell. See :doc:`../user_guide/simulation` for the unfolded picture, the
 eigenmode and the nonlinear mode matching.
 
-.. py:class:: MPC(R, d, medium, n_passes, *, mirror_gdd_fs2=0.0, mirror_tod_fs3=0.0, mirror_reflectivity=1.0, mirror_phase=None, mirror_diameter=None)
+.. py:class:: MPC(R, d, medium, n_passes, *, mirror_gdd_fs2=0.0, mirror_tod_fs3=0.0, mirror_reflectivity=1.0, mirror_phase=None, mirror_diameter=None, plates=(), regions=(), wavelength=None)
 
    Symmetric two-mirror cell.
 
    :param float R: mirror radius of curvature [m]
    :param float d: mirror separation [m], :math:`0 < d < 2R`
-   :param medium: :class:`~thunder4d.materials.Material`
+   :param medium: :class:`~thunder4d.materials.Material` filling the cell, or ``None`` for vacuum
    :param int n_passes: passes = bounces (transit over d + bounce, starting right after a mirror)
    :param float mirror_gdd_fs2: GDD per bounce [fs²]
    :param float mirror_tod_fs3: TOD per bounce [fs³]
@@ -22,6 +22,15 @@ eigenmode and the nonlinear mode matching.
       GDD curve)
    :param float mirror_diameter: clear aperture [m] (soft super-Gaussian edge, order 30);
       ``None`` = infinite
+   :param plates: one or several :class:`~thunder4d.plates.Plate`, crossed once per pass (bulk and
+      hybrid cells)
+   :param regions: gas regions ``[(z0, z1, Material), ...]`` in pass-1 coordinates (centre 0, positive
+      towards mirror B), filled with another gas than ``medium``
+   :param float wavelength: reference wavelength [m] of a cell with plates or regions (required then)
+
+   With plates or regions, :math:`d` is the physical separation and the stability condition applies to
+   the equivalent separation :math:`d_\text{eq}` (:meth:`equivalent_separation`), see
+   :doc:`../user_guide/bulk_hybrid`.
 
    **Attributes:** ``R``, ``d``, ``medium``, ``n_passes``, ``g`` (:math:`1 - d/R`),
    ``theta`` (Gouy phase per pass [rad]).
@@ -40,10 +49,18 @@ eigenmode and the nonlinear mode matching.
 
       :returns: dict with ``w0``, ``w_mirror``, ``zR``, ``gouy_per_pass``
 
-   .. py:method:: nonlinear_mode(P, lam, verbose=False)
+   .. py:method:: equivalent_separation(lam=None)
+
+      Separation of the empty cell with the same diffraction: ``d`` without plates and regions, otherwise
+      the sum of the reduced lengths of the segments.
+
+   .. py:method:: nonlinear_mode(P, lam, verbose=False, vortex=0)
 
       Kerr-matched eigenmode for power ``P`` [W] at wavelength ``lam`` [m]. Raises ``ValueError`` if
-      :math:`P \ge P_c`.
+      :math:`P \ge P_c`. With plates, the second moment of the beam is followed through the segments of
+      the cell and the dict also holds the radius and wavefront curvature to give at the cell centre
+      (``input_w``, ``input_R``) and, per plate, the entry and exit radii, ``B`` and ``P_over_Pc``.
+      ``vortex=l`` matches a Laguerre-Gauss LG\ :sub:`0,l` beam, with the critical power of that mode.
 
       :returns: dict
 

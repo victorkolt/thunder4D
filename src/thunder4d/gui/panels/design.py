@@ -247,8 +247,10 @@ class DesignPanel(QtWidgets.QWidget):
         column.addLayout(files)
         cell_type = QtWidgets.QComboBox()
         cell_type.addItems(["Gas-filled cell", "Bulk (not available yet)", "Hybrid (not available yet)"])
+        model = cell_type.model()
+        assert isinstance(model, QtGui.QStandardItemModel)
         for i in (1, 2):                                       # only the gas-filled cell has a design helper
-            cell_type.model().item(i).setEnabled(False)
+            model.item(i).setEnabled(False)
         cell_type.setToolTip("Kind of cell to design. Bulk and hybrid cells will come with their own design helper.")
         cell_row = QtWidgets.QFormLayout()
         cell_row.addRow("Cell type", cell_type)
@@ -404,7 +406,9 @@ class DesignPanel(QtWidgets.QWidget):
         self.table = QtWidgets.QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(list(COLUMNS))
         for i, name in enumerate(COLUMNS):
-            self.table.horizontalHeaderItem(i).setToolTip(HELP[name])
+            header = self.table.horizontalHeaderItem(i)
+            assert header is not None
+            header.setToolTip(HELP[name])
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -478,7 +482,11 @@ class DesignPanel(QtWidgets.QWidget):
 
     def selected(self) -> Candidate | None:
         rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
-        return self.candidates[self.table.item(rows[0].row(), 0).data(INDEX)] if rows else None
+        if not rows:
+            return None
+        item = self.table.item(rows[0].row(), 0)
+        assert item is not None
+        return self.candidates[item.data(INDEX)]
 
     def _selected(self) -> None:
         c = self.selected()
@@ -622,7 +630,7 @@ class DesignPanel(QtWidgets.QWidget):
         """The header, then the designs in the order shown."""
         rows = [list(COLUMNS)]
         for r in range(self.table.rowCount()):
-            rows.append([self.table.item(r, c).text() for c in range(len(COLUMNS))])
+            rows.append([getattr(self.table.item(r, c), "text", str)() for c in range(len(COLUMNS))])
         return rows
 
     def copy_table(self) -> None:

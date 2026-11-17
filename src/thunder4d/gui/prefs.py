@@ -5,6 +5,7 @@ Also the file dialogs that start in the last folder, and the log view with its S
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from ._qt import QtCore, QtWidgets
 
@@ -45,8 +46,8 @@ def save_file(parent: QtWidgets.QWidget, title: str, name: str, file_filter: str
 def recent() -> list[tuple[str, str]]:
     """[(kind, path)], newest first, files that still exist. kind: input, problem or results."""
     raw = settings().value("recent", [])
-    raw = [raw] if isinstance(raw, str) else list(raw or [])
-    pairs = [tuple(item.split("\t", 1)) for item in raw if "\t" in item]
+    items = [raw] if isinstance(raw, str) else (list(raw) if isinstance(raw, (list, tuple)) else [])
+    pairs = [tuple(item.split("\t", 1)) for item in items if "\t" in item]
     return [(kind, path) for kind, path in pairs if Path(path).is_file()]
 
 
@@ -57,15 +58,15 @@ def add_recent(kind: str, path: str | Path) -> None:
 
 
 # ------------------------------------------------------------ active tab
-def save_layout(window: QtWidgets.QMainWindow) -> None:
+def save_layout(window: Any) -> None:
     s = settings()
     s.setValue("tab", window.tabs.currentIndex())
 
 
-def restore_layout(window: QtWidgets.QMainWindow) -> None:
+def restore_layout(window: Any) -> None:
     s = settings()
     try:
-        window.tabs.setCurrentIndex(int(s.value("tab", 0)))
+        window.tabs.setCurrentIndex(int(str(s.value("tab", 0))))
     except (TypeError, ValueError):
         pass
 
