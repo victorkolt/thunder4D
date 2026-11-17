@@ -6,5 +6,6 @@ User guide
 
    simulation
    lens_frame
+   bulk_hybrid
    design
    accuracy

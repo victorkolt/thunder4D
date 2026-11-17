@@ -20,8 +20,8 @@ velocity at :math:`\lambda_0`:
 - **Kerr part:** instantaneous electronic response, with self-steepening (``self_steepening=False``
   gives :math:`\gamma = n_2\omega_0/c`). It is tapered to zero at the edges of the spectral window.
 - **Not modelled:** ionisation and plasma, Raman response of molecular gases (N₂, air), the folded
-  off-axis geometry (incidence astigmatism, real spot pattern), plates, windows and pressure gradients,
-  vector effects.
+  off-axis geometry (incidence astigmatism, real spot pattern), plates at oblique incidence, pressure
+  gradients, vector effects. Plates at normal incidence are modelled, see :doc:`bulk_hybrid`.
 
 Two solvers share the same pulses, diagnostics and files:
 

@@ -143,6 +143,15 @@ Pulse
 
       Beam defined directly at the cell centre.
 
+   .. py:classmethod:: cell_matched(grid, E, cell, energy, *, nonlinear=True, power="peak", vortex=0, verbose=True)
+
+      Gaussian beam matched to the cell eigenmode, given at the cell centre (size :math:`\propto\sqrt\lambda`).
+      ``nonlinear=False`` is the linear eigenmode, ``True`` the Kerr-matched one at the peak (``"peak"``) or
+      intensity-weighted (``"weighted"``) power of the pulse, or at an explicit power in W. For a cell with
+      plates, the beam is the one that gives the matched beam after a linear propagation back to the
+      injection plane: a Gaussian with a curved wavefront (``pulse.input_w``, ``pulse.input_R``).
+      ``vortex=l`` gives an LG\ :sub:`0,l` beam. See :doc:`../user_guide/bulk_hybrid`.
+
    .. py:classmethod:: from_near_field(grid, E, beam, energy, nf_size, nf_points=256, focal_length=None, target_waist=None, verbose=True)
 
       Beam defined in the collimated near field, in the front focal plane of an

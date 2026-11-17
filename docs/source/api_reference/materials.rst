@@ -3,7 +3,7 @@ thunder4d.materials
 
 .. py:module:: thunder4d.materials
 
-Gas filling the cell.
+Gas filling the cell, and the solids of the plates of a bulk or hybrid cell.
 
 .. py:class:: Material(name, pressure_bar=1.0, temperature_K=293.15, *, n2_1bar=None, sellmeier=None, n_func=None, n2=None)
 
@@ -48,6 +48,24 @@ Gas filling the cell.
    .. py:attribute:: n2
 
       :math:`n_2` at the current pressure and temperature [m²/W].
+
+.. py:function:: vacuum()
+
+   :math:`n = 1`, :math:`n_2 = 0`: the filling medium of a bulk cell in vacuum.
+
+.. py:class:: Solid(name, *, axis="o", n2=None, n_func=None, sellmeier=None)
+
+   Material of a plate. ``Solid("FS")`` takes the Sellmeier coefficients and :math:`n_2` of the table
+   ``SOLIDS``: ``FS`` (fused silica), ``CaF2``, ``BaF2``, ``MgF2``, ``sapphire``, ``YAG``. ``axis`` picks the
+   ordinary (``"o"``) or extraordinary (``"e"``) index of a uniaxial crystal (``MgF2``, ``sapphire``). ``n2``
+   [m²/W] overrides the table, and ``n_func(omega)`` or ``sellmeier=((B1, C1), ...)`` (λ in µm) define a
+   custom solid (then ``n2`` is required). Outside the validity range of the table the Sellmeier formula
+   is extrapolated. Has the methods ``n``, ``k``, ``gvd`` and ``critical_power`` of :class:`Material`.
+
+.. py:data:: SOLIDS
+
+   Dictionary of the solids of the table: Sellmeier coefficients, :math:`n_2` [m²/W], validity range and
+   reference.
 
 .. py:data:: SELLMEIER
 

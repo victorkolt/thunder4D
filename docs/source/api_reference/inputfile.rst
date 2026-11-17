@@ -33,9 +33,11 @@ field is listed in one error message.
    * - ``beam``
      - injection (``"linear"`` | ``"nonlinear"`` Kerr-matched | ``"waist"``), w0_m
    * - ``medium``
-     - **gas**, **pressure_bar**, temperature_K, n2_1bar (None: thunder4d.materials)
+     - **gas** (a gas, or ``"vacuum"`` for a bulk cell), **pressure_bar** (not needed in vacuum), temperature_K,
+       n2_1bar (None: thunder4d.materials)
    * - ``cell``
-     - **roc_m**, **separation_m**, **n_passes**, herriott (information: round_trips, k, branch)
+     - **roc_m**, **separation_m**, **n_passes**, herriott (information: round_trips, k, branch),
+       plates, regions, wavelength_nm (bulk and hybrid cells, see below)
    * - ``mirrors``
      - reflectivity and gdd_fs2 (scalar or table, per bounce), tod_fs3, diameter_m, coating
        (information)
@@ -50,6 +52,38 @@ field is listed in one error message.
      - record_every, near_field, record_mirror
    * - ``design``
      - free form: provenance written by the design helper (predictions, margins)
+
+Bulk and hybrid cells
+---------------------
+
+``cell.plates`` is a list of plates and ``cell.regions`` a list of gas regions, with the positions of
+:doc:`../user_guide/bulk_hybrid` (from the cell centre, positive towards the mirror hit at the end of pass 1).
+``cell.wavelength_nm`` is the reference wavelength of such a cell (None: the laser wavelength). The kind of cell
+is derived: no plates is a gas cell, plates with nothing but vacuum around them a bulk cell, plates and a gas a
+hybrid cell.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 85
+
+   * - Item
+     - Keys
+   * - plate
+     - **thickness_m**, **position_m**, material (``"FS"``, ``"CaF2"``, ``"BaF2"``, ``"MgF2"``, ``"sapphire"``,
+       ``"YAG"``; default ``"FS"``), coating_a and coating_b (``"bare"`` | ``"ar"``; default ``"ar"``), n2
+       (None: the table value)
+   * - region
+     - **z0_m**, **z1_m**, gas (default ``"vacuum"``), pressure_bar (required for a gas), temperature_K
+
+.. code-block:: json
+
+   {"cell": {"roc_m": 0.2, "separation_m": 0.382, "n_passes": 14,
+             "plates": [{"material": "FS", "thickness_m": 0.001, "position_m": 0.14},
+                        {"material": "FS", "thickness_m": 0.001, "position_m": -0.14}],
+             "regions": [{"z0_m": -0.14, "z1_m": 0.14, "gas": "vacuum"}]}}
+
+With plates, the injected beam of ``beam.injection`` ``"linear"`` or ``"nonlinear"`` is built by
+:meth:`~thunder4d.pulse.Pulse.cell_matched`, and the stability check applies to the equivalent separation.
 
 .. py:function:: default_input(**blocks)
 
@@ -84,8 +118,9 @@ field is listed in one error message.
 
    Quick checks of an input before launching it, in milliseconds (neither the pulse nor the solver
    is built): linear eigenmode (``w0_m``, ``w_mirror_m``, ``zR_m``, ``gouy_per_pass_rad``), grid size
-   (``grid_shape``, ``field_MB``), Gaussian estimates of the peak power, of ``p_over_pcr`` and of the
-   peak fluence on the mirrors (``mirror_fluence_J_cm2``).
+   (``grid_shape``, ``field_MB``), Gaussian estimates of the peak power, of ``p_over_pcr`` (gas) and
+   ``plates_p_over_pcr`` (one value per plate), and of the peak fluence on the mirrors
+   (``mirror_fluence_J_cm2``). ``kind`` is ``"gas"``, ``"bulk"`` or ``"hybrid"``.
 
 .. py:data:: FIELDS
 

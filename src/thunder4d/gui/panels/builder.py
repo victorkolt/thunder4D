@@ -13,10 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from ...inputfile import BLOCKS, FIELDS, default_input, describe_input, get_path, input_problems, save_input, set_path
+from .. import prefs
 from .._qt import QtCore, QtWidgets
 from ..fields import FieldEditor, editor_for
 from ..registry import PANELS, PanelSpec
 from ..session import Session
+from ..splitting import RatioSplitter
 
 FILE_FILTER = "THUNDER4D input (*.json);;All files (*)"
 
@@ -49,11 +51,9 @@ class BuilderPanel(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self._toolbar())
-        splitter = QtWidgets.QSplitter()
+        splitter = RatioSplitter(0.4)
         splitter.addWidget(self._form())
         splitter.addWidget(self._checks())
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
         layout.addWidget(splitter, 1)
 
         session.config_changed.connect(self._on_session_config)
@@ -100,11 +100,17 @@ class BuilderPanel(QtWidgets.QWidget):
                 continue
             label = QtWidgets.QLabel(field.label)
             label.setToolTip(field.help or path)
-            forms[block_of(path)].addRow(label, editor)
+            if field.kind == "records":                  # a table needs the whole width: caption above it
+                forms[block_of(path)].addRow(label)
+                forms[block_of(path)].addRow(editor)
+            else:
+                forms[block_of(path)].addRow(label, editor)
             self.rows[path] = (forms[block_of(path)], editor)
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(content)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(content.sizeHint().width() + scroll.verticalScrollBar().sizeHint().width() + 4)
         return scroll
 
     def _checks(self) -> QtWidgets.QWidget:
@@ -207,9 +213,12 @@ class BuilderPanel(QtWidgets.QWidget):
             ("Beam radius on the mirrors", f"{s['w_mirror_m'] * 1e3:.3g} mm"),
             ("Rayleigh length", f"{s['zR_m'] * 1e2:.3g} cm"),
             ("Gouy phase per pass", f"{s['gouy_per_pass_rad']:.4g} rad"),
+            ("Cell type", {"gas": "Gas-filled", "bulk": "Bulk", "hybrid": "Hybrid"}[s["kind"]]),
             ("Path length in the cell", f"{s['path_length_m']:.3g} m"),
             ("Peak power (Gaussian)", f"{s['peak_power_W'] / 1e9:.3g} GW"),
             ("P / P<sub>cr</sub>", f"{s['p_over_pcr']:.3g}"),
+            *([("P / P<sub>cr</sub> in the plates", f"{max(s['plates_p_over_pcr']):.3g}")]
+              if s["plates_p_over_pcr"] else []),
             ("Peak fluence on the mirrors", f"{s['mirror_fluence_J_cm2'] * 1e3:.3g} mJ/cm²"),
             ("Grid", f"{nx} × {ny} × {nt} ({s['field_MB']:.3g} MB per field)"),
         ]
@@ -250,7 +259,7 @@ class BuilderPanel(QtWidgets.QWidget):
     def open_dialog(self) -> None:
         if not self.confirm_discard():
             return
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open input", "", FILE_FILTER)
+        path = prefs.open_file(self, "Open input", FILE_FILTER)
         if path:
             self.open_file(path)
 
@@ -264,6 +273,7 @@ class BuilderPanel(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(self, "Open input", f"Cannot open {path}:\n{err}")
             return False
         self.load_config(raw, path)
+        prefs.add_recent("input", path)
         return True
 
     def save(self) -> bool:
@@ -273,7 +283,7 @@ class BuilderPanel(QtWidgets.QWidget):
 
     def save_as_dialog(self) -> bool:
         start = str(self.path or Path.cwd() / f"{self.cfg.get('name') or 'mpc'}.json")
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save input", start, FILE_FILTER)
+        path = prefs.save_file(self, "Save input", start, FILE_FILTER)
         return self.save_to(path) if path else False
 
     def save_to(self, path: str | Path) -> bool:
@@ -289,6 +299,7 @@ class BuilderPanel(QtWidgets.QWidget):
         self.path = Path(path)
         self.modified = False
         self.refresh()
+        prefs.add_recent("input", path)
         return True
 
 

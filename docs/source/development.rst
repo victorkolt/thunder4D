@@ -67,6 +67,9 @@ windows:
    * - a new tool
      - a ``PanelSpec`` in ``PANELS``
      - ``thunder4d/gui/panels/``
+   * - a colour theme
+     - a ``Theme`` in ``THEMES``
+     - ``thunder4d/gui/theme.py``
 
 .. code-block:: python
 

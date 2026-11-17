@@ -31,7 +31,7 @@ Conventions
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, is_dataclass
 from typing import Literal
 
 import numpy as np
@@ -345,3 +345,18 @@ class DesignProblem:
                 return [clean(x) for x in v]
             return v
         return clean(asdict(self))
+
+    @classmethod
+    def from_dict(cls, data: dict) -> DesignProblem:
+        """Inverse of to_dict (also takes the "problem" of a saved result). Missing keys keep their default,
+        unknown keys are ignored."""
+        def fill(obj, values):
+            for key, value in values.items():
+                if not hasattr(obj, key):
+                    continue
+                if is_dataclass(getattr(obj, key)):
+                    fill(getattr(obj, key), value)
+                else:
+                    setattr(obj, key, tuple(value) if isinstance(value, list) else value)
+            return obj
+        return fill(cls(), data.get("problem", data))

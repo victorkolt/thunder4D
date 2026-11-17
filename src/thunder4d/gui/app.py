@@ -2,16 +2,38 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
 from importlib.metadata import version
+from pathlib import Path
+from typing import Any
 
-from . import panels as _builtin_panels  # noqa: F401  (registers the built-in panels)
+from . import (
+    panels as _builtin_panels,  # noqa: F401  (registers the built-in panels)
+    prefs,
+    theme,
+)
 from ._qt import QtCore, QtGui, QtWidgets
 from .registry import PANELS, PanelSpec, Registry
 from .session import Session
 
 TITLE = "THUNDER4D"
+
+
+class NoWheelUnlessFocused(QtCore.QObject):
+    """Scrolling over a combo box or a spin box scrolls the form, unless the box was clicked first."""
+
+    def eventFilter(self, obj: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        boxes = (QtWidgets.QComboBox, QtWidgets.QAbstractSpinBox)
+        if event.type() == QtCore.QEvent.Type.Wheel and isinstance(obj, boxes) and not obj.hasFocus():
+            area = obj.parentWidget()
+            while area is not None and not isinstance(area, QtWidgets.QAbstractScrollArea):
+                area = area.parentWidget()
+            if area is not None:
+                QtWidgets.QApplication.sendEvent(area.viewport(), event)
+            return True
+        return False
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -28,8 +50,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self._add_panel(spec)
         if not self.panels:
             self.tabs.addTab(self._message("No panel registered yet."), "Welcome")
+        for i in range(min(self.tabs.count(), 9)):
+            QtGui.QShortcut(QtGui.QKeySequence(f"Ctrl+{i + 1}"), self, lambda i=i: self.tabs.setCurrentIndex(i))
         self.session.panel_requested.connect(self.show_panel)
+        self.setAcceptDrops(True)
         self._menus()
+        prefs.restore_layout(self)
         self.statusBar().showMessage(f"thunder4d {version('thunder4d')}")
 
     def show_panel(self, key: str) -> None:
@@ -61,15 +87,91 @@ class MainWindow(QtWidgets.QMainWindow):
             if can_close is not None and not can_close():
                 event.ignore()
                 return
+        prefs.save_layout(self)
         event.accept()
+
+    # ------------------------------------------------------------ opening files
+    def open_path(self, kind: str, path: str) -> None:
+        """kind: input (simulation builder), problem (design helper) or results (viewer)."""
+        key = {"input": "builder", "problem": "design", "results": "results"}[kind]
+        panel: Any = self.panels.get(key)
+        if panel is None:
+            return
+        if kind == "input" and not panel.confirm_discard():
+            return
+        if panel.open_file(path):
+            self.show_panel(key)
+
+    @staticmethod
+    def kind_of(path: str) -> str | None:
+        if path.endswith(".npz"):
+            return "results"
+        if not path.endswith(".json"):
+            return None
+        try:
+            raw = json.loads(Path(path).read_text())
+        except (OSError, ValueError):
+            return "input"                                  # the builder reports the error
+        return "problem" if isinstance(raw, dict) and ("constraints" in raw or "problem" in raw) else "input"
+
+    def dragEnterEvent(self, event: QtGui.QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QtGui.QDropEvent) -> None:
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            kind = self.kind_of(path)
+            if kind is not None:
+                self.open_path(kind, path)
+                break
 
     def _menus(self) -> None:
         file_menu = self.menuBar().addMenu("&File")
         quit_action = file_menu.addAction("&Quit")
         quit_action.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
         quit_action.triggered.connect(self.close)
+        self.recent_menu = file_menu.addMenu("Open &recent")
+        self.recent_menu.aboutToShow.connect(self._fill_recent)
+        view_menu = self.menuBar().addMenu("&View")
+        size_menu = view_menu.addMenu("Text &size")
+        size_group = QtGui.QActionGroup(self)
+        for label, delta in theme.TEXT_SIZES.items():
+            action = size_menu.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(delta == theme.saved_text_size())
+            action.triggered.connect(lambda _=False, d=delta: self.set_text_size(d))
+            size_group.addAction(action)
+        theme_menu = view_menu.addMenu("&Theme")
+        group = QtGui.QActionGroup(self)
+        current = theme.saved()
+        for name in theme.THEMES:
+            action = theme_menu.addAction(name)
+            action.setCheckable(True)
+            action.setChecked(name == current)
+            action.triggered.connect(lambda _=False, n=name: self.set_theme(n))
+            group.addAction(action)
         help_menu = self.menuBar().addMenu("&Help")
         help_menu.addAction("&About").triggered.connect(self._about)
+
+    def _fill_recent(self) -> None:
+        self.recent_menu.clear()
+        entries = prefs.recent()
+        for kind, path in entries:
+            label = {"input": "simulation", "problem": "design", "results": "results"}[kind]
+            action = self.recent_menu.addAction(f"{Path(path).name}  ({label})")
+            action.setToolTip(path)
+            action.triggered.connect(lambda _=False, k=kind, p=path: self.open_path(k, p))
+        if not entries:
+            self.recent_menu.addAction("No recent file").setEnabled(False)
+
+    def set_text_size(self, delta: int) -> None:
+        theme.apply_text_size(delta)
+        theme.save_text_size(delta)
+
+    def set_theme(self, name: str) -> None:
+        theme.save(theme.apply(name))
+        self.statusBar().showMessage(f"Theme: {name}", 5000)
 
     def _about(self) -> None:
         QtWidgets.QMessageBox.about(
@@ -100,6 +202,10 @@ def run(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv[:1])
     app.setApplicationName(TITLE)
+    theme.apply(theme.saved())
+    theme.apply_text_size(theme.saved_text_size())
+    wheel_filter = NoWheelUnlessFocused(app)
+    app.installEventFilter(wheel_filter)
     try:
         window = build_window(args)
     except (OSError, ValueError, KeyError) as err:     # unreadable or invalid input file

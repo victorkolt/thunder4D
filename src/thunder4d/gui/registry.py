@@ -87,6 +87,8 @@ class PlotSpec:
     of `requires` is present, so a plot of a new output appears by itself for the runs that have it.
 
     per_pass: the viewer shows a pass selector and passes options["index"] (index in results["pass"]).
+    db: the figure has a colour map that can be shown in dB or linear: the viewer shows a dB switch and
+        passes options["db"] (see plots._scaled).
     data(results, options) -> {name: array}: what "Export data" writes (default: the `requires` arrays).
     """
     key: str
@@ -96,6 +98,7 @@ class PlotSpec:
     order: float = 100.0
     group: str = ""
     per_pass: bool = False
+    db: bool = False
     data: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any]] | None = None
 
     def export_data(self, results: Mapping[str, Any], options: Mapping[str, Any]) -> Mapping[str, Any]:

@@ -1,0 +1,75 @@
+{
+  "schema": "thunder4d-input",
+  "version": 1,
+  "name": "bulk_westerberg",
+  "notes": "",
+  "laser": {
+    "energy_J": 0.00025,
+    "duration_fs": 180.0,
+    "wavelength_nm": 1030.0,
+    "shape": "gaussian",
+    "spectrum": null,
+    "gdd_fs2": 0.0,
+    "tod_fs3": 0.0
+  },
+  "beam": {
+    "injection": "nonlinear",
+    "w0_m": null
+  },
+  "medium": {
+    "gas": "vacuum",
+    "pressure_bar": null,
+    "temperature_K": 293.15,
+    "n2_1bar": null
+  },
+  "cell": {
+    "roc_m": 0.2,
+    "separation_m": 0.382,
+    "n_passes": 14,
+    "herriott": null,
+    "wavelength_nm": null,
+    "plates": [
+      {
+        "material": "FS",
+        "thickness_m": 0.001,
+        "position_m": 0.14
+      },
+      {
+        "material": "FS",
+        "thickness_m": 0.001,
+        "position_m": -0.14
+      }
+    ],
+    "regions": []
+  },
+  "mirrors": {
+    "reflectivity": 1.0,
+    "gdd_fs2": 0.0,
+    "tod_fs3": 0.0,
+    "diameter_m": null,
+    "coating": null
+  },
+  "grid": {
+    "preset": "coarse",
+    "box_factor": null,
+    "points_per_waist": null,
+    "time_window_factor": null,
+    "lambda_min_nm": 880.0,
+    "lambda_max_nm": 1220.0,
+    "precision": "single",
+    "device": "auto",
+    "fft_backend": "auto"
+  },
+  "solver": {
+    "phi_max": 0.02,
+    "gouy_step": 0.05,
+    "self_steepening": true,
+    "kernels": "auto"
+  },
+  "run": {
+    "record_every": 1,
+    "near_field": true,
+    "record_mirror": true
+  },
+  "design": null
+}
