@@ -34,6 +34,7 @@ from ..fields import FieldEditor, editor_for
 from ..plotting import FigureWidget
 from ..registry import PANELS, PanelSpec
 from ..session import Session
+from ..splitting import RatioSplitter
 from ..worker import Task
 
 # Sections of the form, then the fields: attribute path in DesignProblem -> Field.
@@ -217,11 +218,9 @@ class DesignPanel(QtWidgets.QWidget):
         self.rows: dict[str, tuple[QtWidgets.QFormLayout, FieldEditor]] = {}
         self.errors: dict[str, str] = {}
 
-        splitter = QtWidgets.QSplitter()
+        splitter = RatioSplitter(0.4)
         splitter.addWidget(self._form())
         splitter.addWidget(self._results())
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 3)
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(splitter)
         self.load_problem(self.problem)

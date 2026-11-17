@@ -17,6 +17,7 @@ from .._qt import QtCore, QtWidgets
 from ..fields import FieldEditor, editor_for
 from ..registry import PANELS, PanelSpec
 from ..session import Session
+from ..splitting import RatioSplitter
 
 FILE_FILTER = "THUNDER4D input (*.json);;All files (*)"
 
@@ -49,11 +50,9 @@ class BuilderPanel(QtWidgets.QWidget):
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(self._toolbar())
-        splitter = QtWidgets.QSplitter()
+        splitter = RatioSplitter(0.4)
         splitter.addWidget(self._form())
         splitter.addWidget(self._checks())
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
         layout.addWidget(splitter, 1)
 
         session.config_changed.connect(self._on_session_config)
@@ -105,6 +104,8 @@ class BuilderPanel(QtWidgets.QWidget):
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(content)
+        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setMinimumWidth(content.sizeHint().width() + scroll.verticalScrollBar().sizeHint().width() + 4)
         return scroll
 
     def _checks(self) -> QtWidgets.QWidget:
