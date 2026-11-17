@@ -7,6 +7,11 @@ the chosen design goes to the simulation builder as a standard input file (desig
 from __future__ import annotations
 
 import copy
+import csv
+import json
+import os
+import re
+import time
 from typing import Any
 
 from ...design import (
@@ -22,6 +27,7 @@ from ...design import (
     to_input,
 )
 from ...design.catalog.gases import GASES
+from ...design.catalog.mirrors import cavity_coatings
 from ...inputfile import GRID_PRESETS, Field
 from .._qt import QtCore, QtGui, QtWidgets
 from ..fields import FieldEditor, editor_for
@@ -34,50 +40,91 @@ from ..worker import Task
 # A Limit is edited through its value (".value") or its safety factor (".safety").
 DESIGN_SECTIONS = {"laser": "Laser", "target": "Target", "constraints": "Limits", "search": "Search"}
 DESIGN_FIELDS: dict[str, Field] = {
-    "laser.energy_J": Field("Pulse energy", unit="mJ", scale=1e-3),
+    "laser.energy_J": Field("Pulse energy", unit="mJ", scale=1e-3, help="Energy of the pulse from the laser."),
     "laser.duration_fs": Field("Duration (FWHM)", unit="fs", help="Duration of the injected pulse."),
     "laser.tl_duration_fs": Field("Transform limit", unit="fs", optional=True, none_text="= duration",
                                   help="If the injected pulse is chirped: its transform-limited duration."),
-    "laser.wavelength_nm": Field("Central wavelength", unit="nm"),
-    "laser.rep_rate_Hz": Field("Repetition rate", unit="kHz", scale=1e3),
-    "laser.polarization": Field("Polarisation", "choice", choices=("linear", "circular")),
+    "laser.wavelength_nm": Field("Central wavelength", unit="nm", help="Central wavelength of the pulse."),
+    "laser.rep_rate_Hz": Field("Repetition rate", unit="kHz", scale=1e3,
+                                help="Only sets the average power on the mirrors (thermal limit, off by default)."),
+    "laser.polarization": Field("Polarisation", "choice", choices=("linear", "circular"),
+                                 help="Circular gives a Kerr index of 2/3 of the linear one."),
     "target.objective": Field("Objective", "choice",
-                              choices=("max_peak_power", "shortest", "target_duration", "target_compression")),
+                              choices=("max_peak_power", "shortest", "target_duration", "target_compression"),
+                              help="What best means. max_peak_power: highest compressed peak power. shortest: "
+                                   "shortest compressed pulse. The two targets: reach the value, not beyond."),
     "target.target_duration_fs": Field("Target duration", unit="fs", optional=True,
+                                       help="Compressed duration to reach, not shorter.",
                                        show_if=("target.objective", ("target_duration",))),
     "target.target_compression": Field("Target compression", optional=True,
+                                          help="Input duration / compressed duration to reach.",
                                        show_if=("target.objective", ("target_compression",))),
     "target.min_throughput.value": Field("Min throughput", help="Soft limit: penalised below."),
-    "constraints.gas.allowed": Field("Gases", "multichoice", choices=tuple(GASES)),
-    "constraints.mirrors.allowed_roc_m": Field("Mirror RoCs available", "float_list", unit="m"),
-    "constraints.mirrors.allowed_diameters_inch": Field("Mirror diameters", "float_list", unit="inch"),
-    "constraints.space.max_separation_m.value": Field("Max mirror separation", unit="m"),
-    "constraints.pressure.pressure_bar": Field("Pressure range (min, max)", "float_list", unit="bar"),
-    "constraints.kerr.p_over_pcr.value": Field("Max P / Pcr"),
-    "constraints.kerr.b_per_pass_rad.value": Field("Max B per pass", unit="rad"),
+    "constraints.gas.allowed": Field("Gases", "multichoice", choices=tuple(GASES), help="Gases the search may use."),
+    "constraints.mirrors.allowed_roc_m": Field("Mirror RoCs available", "float_list", unit="m",
+        help="Radii of curvature you can use. Give one value to fix the mirrors you own."),
+    "constraints.mirrors.allowed_diameters_inch": Field("Mirror diameters", "float_list", unit="inch",
+        help="Diameters available: they set how many spots fit on a mirror."),
+    "constraints.space.max_separation_m.value": Field("Max mirror separation", unit="m",
+        help="Longest distance allowed between the two mirrors."),
+    "constraints.pressure.pressure_bar": Field("Pressure range (min, max)", "float_list", unit="bar",
+        help="Lowest and highest pressure tried (rating of the chamber and windows)."),
+    "constraints.kerr.p_over_pcr.value": Field("Max P / Pcr",
+        help="Peak power over the critical power of self-focusing."),
+    "constraints.kerr.b_per_pass_rad.value": Field("Max B per pass", unit="rad",
+        help="Kerr phase (B integral) on axis, per pass."),
+    "constraints.mirrors.allowed_coatings": Field("Mirror coatings", "multichoice",
+                                                  choices=tuple(m.name for m in cavity_coatings()), optional=True,
+                                                  help="Coatings tried. None checked: all the cavity coatings."),
+    "constraints.mirrors.fluence.value": Field("Max fluence", unit="J/cm²", optional=True, none_text="LIDT of coating",
+                                               help="Peak fluence on the mirrors. Empty: the LIDT of each coating."),
     "constraints.mirrors.fluence.safety": Field("Fluence: fraction of the LIDT",
                                                 help="Peak fluence <= this x LIDT of the coating."),
     "constraints.ionization.peak_intensity_W_cm2.safety": Field("Intensity: fraction of ionisation",
                                                                 help="Peak intensity <= this x threshold."),
-    "losses.mode_matching_efficiency": Field("Mode-matching efficiency"),
-    "search.round_trips": Field("Round trips M (min, max)", "float_list"),
-    "search.branches": Field("Branches", "multichoice", choices=("concentric", "planar")),
-    "refinement.n_candidates": Field("Designs to find", "int"),
+    "losses.mode_matching_efficiency": Field("Mode-matching efficiency",
+        help="Fraction of the energy injected in the cell mode (1 = perfect)."),
+    "search.round_trips": Field("Round trips M (min, max)", "float_list",
+        help="Range of M tried: round trips of one re-entrant cycle."),
+    "search.k_range": Field("Index k (min, max)", "float_list", optional=True, none_text="all k < M/2",
+                            help="Re-entrant index k of the cell. Max k is the second value."),
+    "search.branches": Field("Branches", "multichoice", choices=("concentric", "planar"),
+                            help="concentric: d > R. planar: d < R."),
+    "refinement.n_candidates": Field("Designs to find", "int",
+        help="Number of designs returned after the Fast 1+1D refinement."),
 }
-RANGES = ("constraints.pressure.pressure_bar", "search.round_trips")     # (min, max) pairs
+RANGES = ("constraints.pressure.pressure_bar", "search.round_trips", "search.k_range")     # (min, max) pairs
 
 
 def checked(path: str, field: Field, value: Any) -> Any:
     """The value of a design field, or ValueError if the search could not use it."""
     if (value is None or value == []) and not field.optional:
         raise ValueError("required" if field.kind != "multichoice" else "choose at least one")
-    if path in RANGES and (len(value) != 2 or value[0] > value[1]):
+    if value == [] and field.kind == "multichoice":
+        return None                                           # nothing checked: no restriction
+    if path in RANGES and value is not None and (len(value) != 2 or value[0] > value[1]):
         raise ValueError("give two values: min, max")
     return value
 
 
 SOLVERS = {"Fast 1+1D (accurate, minutes)": Fast1DQuick, "Analytic (instant, rough)": AnalyticQuick}
 COLUMNS = ("Gas", "p [bar]", "R [m]", "M", "k", "Passes", "Branch", "d [m]", "τ out [fs]", "Throughput", "Score")
+HELP = {
+    "Gas": "Gas filling the cell.",
+    "p [bar]": "Gas pressure, tuned by the refinement.",
+    "R [m]": "Radius of curvature of the two cavity mirrors.",
+    "M": "Round trips of one re-entrant cycle of the Herriott cell (M spots on each mirror).",
+    "k": "Re-entrant index, coprime with M. With R and M it sets the separation d = R (1 ± cos(π k / M)).",
+    "Passes": "Passes through the cell (at most 2 M). One pass = transit over d + one mirror bounce.",
+    "Branch": "concentric: d > R. planar: d < R.",
+    "d [m]": "Distance between the two mirrors.",
+    "τ out [fs]": "FWHM duration after the output compressor (lossless, optimal GDD).",
+    "Throughput": "Fraction of the injected energy that comes out: mirror reflectivity over all bounces, "
+                  "mode matching.",
+    "Score": "Ranking, lower is better: objective + penalties of the soft limits. "
+             "With max_peak_power it is minus the compressed peak power over the input peak power. "
+             "Only comparable between designs of the same problem. Breakdown in Details.",
+}
 
 
 def section_of(path: str) -> str:
@@ -96,12 +143,28 @@ def set_attr(obj: Any, path: str, value: Any) -> None:
     for part in parents:
         obj = getattr(obj, part)
     old = getattr(obj, last)
-    if isinstance(old, tuple) and value is not None:          # keep the types of the dataclass
+    if last == "k_range" and value is not None:               # None or (min, max) of integers
+        value = tuple(round(v) for v in value)
+    elif isinstance(old, tuple) and value is not None:          # keep the types of the dataclass
         if old and all(isinstance(v, int) for v in old):
             value = tuple(round(v) for v in value)
         else:
             value = tuple(value)
     setattr(obj, last, value)
+
+
+class StoppableDesigner(MPCDesigner):
+    """Stop also works with several workers: it takes effect before the next batch of refinements."""
+
+    def __init__(self, *args: Any, task: Task, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.task = task
+
+    def _refine(self, candidates: Any, max_attempts: Any, pmap: Any) -> DesignResult:
+        def stoppable(fn: Any, items: Any) -> Any:
+            self.task.check()
+            return pmap(fn, items)
+        return super()._refine(candidates, max_attempts, stoppable)
 
 
 class CancellableQuick:
@@ -113,6 +176,25 @@ class CancellableQuick:
     def __call__(self, problem: DesignProblem, cand: Candidate, /) -> Any:
         self.task.check()
         return self.inner(problem, cand)
+
+
+SORT_KEY = QtCore.Qt.ItemDataRole.UserRole           # what a column is sorted on
+INDEX = QtCore.Qt.ItemDataRole.UserRole + 1          # position of the design in DesignPanel.candidates
+
+
+class SortItem(QtWidgets.QTableWidgetItem):
+    """A table cell sorted by its number (not by its text) when it is one."""
+
+    def __lt__(self, other: QtWidgets.QTableWidgetItem) -> bool:
+        a, b = self.data(SORT_KEY), other.data(SORT_KEY)
+        return a < b if type(a) is type(b) else str(a) < str(b)
+
+
+def sort_key(text: str) -> float | str:
+    try:
+        return float(text)
+    except ValueError:
+        return float("inf") if text == "–" else text
 
 
 def candidate_row(c: Candidate) -> list[str]:
@@ -143,11 +225,34 @@ class DesignPanel(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(splitter)
         self.load_problem(self.problem)
+        context = QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut
+        for keys, slot in (("Ctrl+Return", self.start), ("Ctrl+Enter", self.start), ("Esc", self.stop),
+                           ("Ctrl+O", self.open_problem), ("Ctrl+S", self.save_problem)):
+            shortcut = QtGui.QShortcut(QtGui.QKeySequence(keys), self, slot)
+            shortcut.setContext(context)
 
     # ------------------------------------------------------------ form
     def _form(self) -> QtWidgets.QScrollArea:
         content = QtWidgets.QWidget()
         column = QtWidgets.QVBoxLayout(content)
+        files = QtWidgets.QHBoxLayout()
+        for text, tip, slot in (("Open…", "Load a design problem (JSON), or the problem of saved results (Ctrl+O)",
+                                 self.open_problem),
+                                ("Save…", "Save the form as a design problem (JSON, Ctrl+S)", self.save_problem),
+                                ("Reset", "Back to the default problem", self.reset)):
+            button = QtWidgets.QPushButton(text)
+            button.setToolTip(tip)
+            button.clicked.connect(slot)
+            files.addWidget(button)
+        column.addLayout(files)
+        cell_type = QtWidgets.QComboBox()
+        cell_type.addItems(["Gas-filled cell", "Bulk (not available yet)", "Hybrid (not available yet)"])
+        for i in (1, 2):                                       # only the gas-filled cell has a design helper
+            cell_type.model().item(i).setEnabled(False)
+        cell_type.setToolTip("Kind of cell to design. Bulk and hybrid cells will come with their own design helper.")
+        cell_row = QtWidgets.QFormLayout()
+        cell_row.addRow("Cell type", cell_type)
+        column.addLayout(cell_row)
         forms = {}
         for key, title in DESIGN_SECTIONS.items():
             group = QtWidgets.QGroupBox(title)
@@ -170,7 +275,14 @@ class DesignPanel(QtWidgets.QWidget):
         self.solver = QtWidgets.QComboBox()
         self.solver.addItems(list(SOLVERS))
         self.solver.setToolTip("Model used to rank and refine the designs (the screen is always analytic)")
+        self.solver.currentTextChanged.connect(lambda _: self._update_form())
         forms["search"].addRow("Solver", self.solver)
+        self.workers = QtWidgets.QSpinBox()
+        cores = getattr(os, "process_cpu_count", os.cpu_count)() or 1       # the cores this process may use
+        self.workers.setRange(1, cores)
+        self.workers.setValue(cores)
+        self.workers.setToolTip("Processes running the Fast 1+1D simulations in parallel.\nDefault: all the cores.")
+        forms["search"].addRow("Workers (Fast 1+1D)", self.workers)
         column.addStretch(1)
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -187,6 +299,45 @@ class DesignPanel(QtWidgets.QWidget):
             editor.blockSignals(False)
         self.errors.clear()
         self._update_form()
+
+    def reset(self) -> None:
+        if self.task is not None:
+            return
+        self.preset.blockSignals(True)
+        self.preset.setCurrentText("custom")
+        self.preset.blockSignals(False)
+        self.load_problem(DesignProblem())
+
+    def open_problem(self) -> None:
+        if self.task is not None:
+            return
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open a design problem", "", "JSON (*.json)")
+        if path:
+            self.open_file(path)
+
+    def open_file(self, path: str) -> bool:
+        if self.task is not None:
+            return False
+        try:
+            with open(path) as f:
+                problem = DesignProblem.from_dict(json.load(f))
+        except (OSError, ValueError, TypeError, AttributeError) as err:
+            self.state.setText(f"Cannot open {path}: {err}")
+            return False
+        self.preset.blockSignals(True)
+        self.preset.setCurrentText("custom")
+        self.preset.blockSignals(False)
+        self.load_problem(problem)
+        self.state.setText(f"Opened {path}")
+        return True
+
+    def save_problem(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save the design problem", "design_problem.json",
+                                                        "JSON (*.json)")
+        if path:
+            with open(path, "w") as f:
+                json.dump(self.problem.to_dict(), f, indent=2)
+            self.state.setText(f"Saved {path}")
 
     def apply_preset(self, name: str) -> None:
         if name == "custom":
@@ -217,6 +368,7 @@ class DesignPanel(QtWidgets.QWidget):
                 form.setRowVisible(editor, get_attr(self.problem, other) in values)
             editor.set_problem(self.errors.get(path))
         idle = self.task is None
+        self.workers.setEnabled(idle and SOLVERS[self.solver.currentText()] is Fast1DQuick)
         self.run_button.setEnabled(idle and not self.errors)
         self.run_button.setToolTip("\n".join(self.errors.values()))
 
@@ -230,20 +382,33 @@ class DesignPanel(QtWidgets.QWidget):
         self.stop_button = QtWidgets.QPushButton("Stop")
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self.stop)
+        self.run_button.setToolTip("Ctrl+Enter")
+        self.progress = QtWidgets.QProgressBar()
+        self.progress.setFixedWidth(160)
+        self.progress.setTextVisible(False)
+        self.progress.hide()
+        self.elapsed = QtWidgets.QLabel()
+        self.clock = QtCore.QTimer(self)
+        self.clock.timeout.connect(self._tick)
         self.state = QtWidgets.QLabel("Set the laser and the limits, then Find designs.")
         self.state.setWordWrap(True)
         self.state.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred)
         for w in (self.run_button, self.stop_button):
             bar.addWidget(w)
+        bar.addWidget(self.progress)
+        bar.addWidget(self.elapsed)
         bar.addWidget(self.state, 1)
         layout.addLayout(bar)
 
         self.table = QtWidgets.QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(list(COLUMNS))
+        for i, name in enumerate(COLUMNS):
+            self.table.horizontalHeaderItem(i).setToolTip(HELP[name])
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setToolTip("Click a column to sort on it")
         self.table.itemSelectionChanged.connect(self._selected)
         self.table.doubleClicked.connect(lambda _: self.use_in_builder())
 
@@ -256,10 +421,18 @@ class DesignPanel(QtWidgets.QWidget):
         self.injection.addItems(["linear", "nonlinear"])
         self.save_button = QtWidgets.QPushButton("Save results…")
         self.save_button.clicked.connect(self.save_results)
+        self.copy_button = QtWidgets.QPushButton("Copy table")
+        self.copy_button.setToolTip("Copy the designs to the clipboard (paste in a spreadsheet)")
+        self.copy_button.clicked.connect(self.copy_table)
+        self.csv_button = QtWidgets.QPushButton("CSV…")
+        self.csv_button.setToolTip("Save the designs as a CSV file")
+        self.csv_button.clicked.connect(self.export_csv)
         for w in (self.use_button, QtWidgets.QLabel("grid"), self.grid_preset, QtWidgets.QLabel("injection"),
                   self.injection):
             export.addWidget(w)
         export.addStretch(1)
+        export.addWidget(self.copy_button)
+        export.addWidget(self.csv_button)
         export.addWidget(self.save_button)
 
         self.details = QtWidgets.QPlainTextEdit()
@@ -298,10 +471,12 @@ class DesignPanel(QtWidgets.QWidget):
         for w in (self.use_button, self.map_button):
             w.setEnabled(has and self.task is None)
         self.save_button.setEnabled(self.result is not None and self.task is None)
+        for w in (self.copy_button, self.csv_button):
+            w.setEnabled(bool(self.candidates))
 
     def selected(self) -> Candidate | None:
         rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
-        return self.candidates[rows[0].row()] if rows else None
+        return self.candidates[self.table.item(rows[0].row(), 0).data(INDEX)] if rows else None
 
     def _selected(self) -> None:
         c = self.selected()
@@ -314,9 +489,11 @@ class DesignPanel(QtWidgets.QWidget):
             return
         problem = copy.deepcopy(self.problem)
         inner = SOLVERS[self.solver.currentText()]()
+        workers = self.workers.value() if isinstance(inner, Fast1DQuick) else 1
 
         def work(task: Task) -> DesignResult:
-            designer = MPCDesigner(problem, quick=CancellableQuick(inner, task), verbose=True)
+            quick = CancellableQuick(inner, task) if workers == 1 else inner     # a Task cannot go to a process
+            designer = StoppableDesigner(problem, quick=quick, verbose=True, workers=workers, task=task)
             starts = designer.screen()
             task.check()
             return designer.refine(starts)
@@ -328,6 +505,12 @@ class DesignPanel(QtWidgets.QWidget):
     def _run(self, task: Task, message: str, on_success: Any) -> None:
         self.task = task
         task.output.connect(self.log.appendPlainText)
+        task.output.connect(self._progress)
+        self.t0 = time.monotonic()
+        self.clock.start(1000)
+        self._tick()
+        self.progress.setRange(0, 0)                       # busy until the search reports how many designs it wants
+        self.progress.show()
         task.succeeded.connect(on_success)
         task.failed.connect(self._failed)
         task.cancelled.connect(lambda: self.state.setText("Stopped."))
@@ -337,6 +520,16 @@ class DesignPanel(QtWidgets.QWidget):
         self._update_form()
         self._set_selection_actions()
         task.start()
+
+    def _tick(self) -> None:
+        minutes, seconds = divmod(int(time.monotonic() - self.t0), 60)
+        self.elapsed.setText(f"{minutes}:{seconds:02d}")
+
+    def _progress(self, line: str) -> None:
+        found = re.match(r"\[(\d+)/(\d+), try", line)      # "[2/5, try 7] ..." printed by the designer
+        if found:
+            self.progress.setRange(0, int(found[2]))
+            self.progress.setValue(int(found[1]) - ("no feasible" in line))     # failed tries print the next index
 
     def stop(self) -> None:
         if self.task is not None:
@@ -348,6 +541,8 @@ class DesignPanel(QtWidgets.QWidget):
             self.task.deleteLater()
         self.task = None
         self.stop_button.setEnabled(False)
+        self.progress.hide()
+        self.clock.stop()
         self._update_form()
         self._set_selection_actions()
 
@@ -362,15 +557,20 @@ class DesignPanel(QtWidgets.QWidget):
     def show_result(self, result: DesignResult) -> None:
         self.result = result
         self.candidates = sorted(result.refined, key=lambda c: c.score)
+        self.table.setSortingEnabled(False)
         self.table.setRowCount(0)
-        for c in self.candidates:
+        for i, c in enumerate(self.candidates):
             r = self.table.rowCount()
             self.table.insertRow(r)
             for col, text in enumerate(candidate_row(c)):
-                item = QtWidgets.QTableWidgetItem(text)
+                item = SortItem(text)
+                item.setData(SORT_KEY, sort_key(text))
+                item.setData(INDEX, i)
                 if col not in (0, 6):
                     item.setTextAlignment(QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter)
                 self.table.setItem(r, col, item)
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(len(COLUMNS) - 1, QtCore.Qt.SortOrder.AscendingOrder)       # the score
         if self.candidates:
             self.state.setText(f"{len(self.candidates)} design(s) found. Double-click one to simulate it.")
             self.table.selectRow(0)
@@ -415,11 +615,28 @@ class DesignPanel(QtWidgets.QWidget):
             self.task.wait()
         return True
 
+    def table_rows(self) -> list[list[str]]:
+        """The header, then the designs in the order shown."""
+        rows = [list(COLUMNS)]
+        for r in range(self.table.rowCount()):
+            rows.append([self.table.item(r, c).text() for c in range(len(COLUMNS))])
+        return rows
+
+    def copy_table(self) -> None:
+        QtWidgets.QApplication.clipboard().setText("\n".join("\t".join(row) for row in self.table_rows()))
+        self.state.setText("Designs copied to the clipboard.")
+
+    def export_csv(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save the designs", "designs.csv", "CSV (*.csv)")
+        if path:
+            with open(path, "w", newline="") as f:
+                csv.writer(f).writerows(self.table_rows())
+            self.state.setText(f"Saved {path}")
+
     def save_results(self) -> None:
         if self.result is None:
             return
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save design results", "design.json",
-                                                        "JSON (*.json)")
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save design results", "design.json", "JSON (*.json)")
         if path:
             self.result.save_json(path)
             self.state.setText(f"Saved {path}")
