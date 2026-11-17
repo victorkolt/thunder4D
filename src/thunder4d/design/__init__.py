@@ -1,10 +1,15 @@
-"""MPC design helper (gas-filled Herriott cells).
+"""MPC design helper (gas-filled, bulk and hybrid Herriott cells).
 
     from thunder4d.design import DesignProblem, Fast1DQuick, LaserSpec, MPCDesigner, starting_points
     problem = DesignProblem(laser=LaserSpec.preset("mpc1_18mJ_350fs"))
     result = MPCDesigner(problem, quick=Fast1DQuick()).refine(starting_points(problem))
     print(result.table());  result.save_json("design.json")
     cell = result.best.to_cell()          # -> thunder4d MPC for 4D verification
+
+Bulk / hybrid cells: plates (each its own material, thickness, position, coating) and gas sections
+(each its own gas and pressure) described by a Layout; the search tries n identical plates
+(SearchSpace.plate_counts, stock thicknesses of Constraints.plates) and your own layouts
+(SearchSpace.layouts). fast1d and the 4D export follow the layout. examples/design_bulk_mpc.py.
 
 Tutorial: examples/design_tutorial.ipynb
 """
@@ -29,14 +34,18 @@ from .specs import (
     IonizationConstraints,
     KerrConstraints,
     LaserSpec,
+    Layout,
     Limit,
     Losses,
     Max,
     Min,
     MirrorConstraints,
     Off,
+    PlateConstraints,
+    PlateSpec,
     PressureConstraints,
     Refinement,
+    RegionSpec,
     SearchSpace,
     SpaceConstraints,
     SpotConstraints,
@@ -58,6 +67,7 @@ __all__ = [
     "IonizationConstraints",
     "KerrConstraints",
     "LaserSpec",
+    "Layout",
     "Limit",
     "Losses",
     "MPCDesigner",
@@ -65,10 +75,13 @@ __all__ = [
     "Min",
     "MirrorConstraints",
     "Off",
+    "PlateConstraints",
+    "PlateSpec",
     "PressureConstraints",
     "QuickResult",
     "QuickSolver",
     "Refinement",
+    "RegionSpec",
     "SearchSpace",
     "SpaceConstraints",
     "SpotConstraints",

@@ -69,6 +69,23 @@ With `--fft fftw`, the first steps include the FFTW planning (a few seconds per 
 
 The Numba threads follow `NUMBA_NUM_THREADS` (default: all cores, printed at the start of the run).
 
+## fast1d against the 4D runs
+
+`fast1d_check.py` re-runs every benchmark with fast1d, the 1+1D solver of the design helper, on the
+same physics (the benchmark's own `make_cell` and `spectrum()` with the parameters of its 4D reference
+run, same injection) and compares it with `reference/<name>/results.json` and with the paper: Fourier
+limit, compressed duration and GDD, peak power, transmission, B-integral, mirror fluence. The LG₀,ₗ
+vortex benchmarks are skipped (fast1d follows a gaussian beam).
+
+```bash
+cd benchmark
+python fast1d_check.py                          # all benchmarks, accuracy "default" (seconds to minutes each)
+python fast1d_check.py omar2024_400uJ --accuracy fine
+python fast1d_check.py --dry-run                # build the inputs only
+```
+
+The tables are printed and saved in `results/fast1d_check/<accuracy>.md` and `.json`.
+
 ## Output
 
 Each run goes to `results/<benchmark>/<label>_<fingerprint>/`. The fingerprint hashes the

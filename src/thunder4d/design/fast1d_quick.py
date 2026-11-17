@@ -13,6 +13,12 @@ Mapping design helper -> fast1d
   convention as the 4D code: start right after a mirror, one pass = transit over d + bounce.
 * mirrors: R(lambda) and GDD(lambda) of the candidate's coating, per bounce. No clipping on the
   mirror edge (spot pattern constraints are evaluated separately).
+* plates / gas sections (bulk and hybrid cells): fast1d is given the thunder4d cell of the candidate
+  (Candidate.to_cell: same media, layout and separation as the 4D export) and injects the beam in
+  the Kerr-matched mode of the loaded cell at the input peak power (moment method), as the exported
+  input file does (injection "nonlinear"). The matching option does not apply to these cells.
+  Mirror fluence of these cells: with the smaller of the Kerr-matched and the linear mirror spot, since
+  the pulse wings (lower power) stay near the linear mode (4D runs: ~25 % above the matched estimate).
 * input: energy reduced by Losses.mode_matching_efficiency;
   pre-chirp = LaserSpec.prechirp + Candidate.prechirp, plus the GDD implied by duration_fs >
   tl_duration_fs (positive chirp assumed).
@@ -87,11 +93,17 @@ class Fast1DQuick:
                   "gas": cand.gas, "pressure": cand.pressure_bar, "roc": cand.roc_m, "length": cand.separation_m,
                   "n_passes": cand.n_passes, "mirror_response": mirror_response, "n2": n2_lin,
                   "accuracy": accuracy or self.accuracy}
-        if self.matching == "nonlinear":
+        if self.matching == "nonlinear" and not cand.segmented:
             _, w0, _ = fast1d.cell_mode(cand.roc_m, cand.separation_m, lam0)
             pcr = lam0 ** 2 / (2 * np.pi * n2_lin * las.n2_polarization_factor)
             ratio = eta_in * las.peak_power_W / pcr
             kw["w0_in"] = w0 * max(1.0 - ratio, 1e-3) ** 0.25
+        if cand.segmented:   # plates / gas sections: the thunder4d cell, injected in its Kerr-matched mode
+            kw["cell"] = cand.to_cell(las.n2_polarization_factor, lam0)
+            kw["match_power"] = eta_in * las.peak_power_W
+            kw.pop("n2")
+            if cand.is_vacuum:
+                kw["gas"], kw["pressure"] = "Ar", 0.0     # unused by the segmented solver
         kw.update(self.options)
         inp = fast1d.MPCInput(**kw)
 
@@ -130,7 +142,10 @@ class Fast1DQuick:
         gdd_fs2 = out.gdd_compression * 1e30
         throughput = out.energy_out / las.energy_J      # lossless compressor
         nb = out.inp.n_passes                                  # one bounce per pass
-        fluence = 2 * out.pass_energy[:nb] / (np.pi * out.pass_w_mirror[:nb] ** 2) * 1e-4   # J/cm2
+        w_fl = out.pass_w_mirror[:nb]
+        if cand.segmented:   # the pulse wings stay near the linear mode: the smaller spot (as the 4D runs show)
+            w_fl = np.minimum(w_fl, cand.linear_mode(las.lambda0)[1])
+        fluence = 2 * out.pass_energy[:nb] / (np.pi * w_fl ** 2) * 1e-4   # J/cm2
         coat = get_mirror(cand.coating)
         lam, s = out.spectrum_lambda("out")
         out_of_band = float(s[~coat.in_band(lam * 1e9)].sum() / s.sum())
@@ -141,6 +156,11 @@ class Fast1DQuick:
                   "w_mirror_max_m": float(out.pass_w_mirror.max()),
                   "average_power_mirror_W": out.energy_in * las.rep_rate_Hz * out.inp.n_passes / 2,
                   "ftl_duration_fs": out.fwhm_ftl * 1e15}
+        if out.segmented:
+            extras.update(self._segmented_metrics(problem, out))
+        p_over_pcr, intensity = out.peak_power_over_pcr, out.intensity_max * 1e-4
+        if out.segmented and not out.gas_intensity_max:      # no Kerr medium in the gas (vacuum)
+            p_over_pcr, intensity = None, None
         return QuickResult(
             duration_fs=out.fwhm_compressed * 1e15,
             peak_power_W=out.peak_power_compressed,
@@ -149,14 +169,43 @@ class Fast1DQuick:
             compressor_gdd_fs2=gdd_fs2,
             b_total_rad=out.b_integral,
             b_per_pass_rad=float(b_pass.max()),
-            p_over_pcr=out.peak_power_over_pcr,
-            peak_intensity_W_cm2=out.intensity_max * 1e-4,
+            p_over_pcr=p_over_pcr,
+            peak_intensity_W_cm2=intensity,
             mirror_fluence_J_cm2=fluence if nb else None,
             duration_per_bounce_fs=out.pass_fwhm[:nb] * 1e15 if nb else None,
             out_of_band_fraction=out_of_band,
             spectrum_nm=(lam * 1e9, s) if self.keep_spectrum else None,
             extras=extras,
         )
+
+    @staticmethod
+    def _segmented_metrics(problem, out):
+        """Per plate (worst crossing) and per gas: the metrics evaluate() checks for bulk / hybrid cells."""
+        from .scan import marburger_distance
+
+        lam = problem.laser.lambda0
+        per = {}
+        for r in out.plate_crossings:
+            w_face = min(r["w_entry"], r["w_exit"])
+            x = {"material": r["name"], "intensity_W_cm2": r["intensity"] * 1e-4, "b_rad": r["b"],
+                 "fluence_J_cm2": 2 * r["energy_entry"] / (np.pi * w_face ** 2) * 1e-4,
+                 "self_focusing": r["thickness"] / marburger_distance(r["ppk_entry"] / r["pcr"], w_face, lam, r["n0"]),
+                 "p_over_pcr": r["ppk_entry"] / r["pcr"]}
+            old = per.get(r["plate"])
+            per[r["plate"]] = x if old is None else {k: (v if k == "material" else max(v, x[k]))
+                                                     for k, v in old.items()}
+        plates = [per[i] for i in sorted(per)]
+        sections = [{"gas": g, "intensity_W_cm2": i * 1e-4, "p_over_pcr": out.gas_p_over_pcr.get(g, 0.0)}
+                    for g, i in out.gas_intensity_max.items()]
+        b_plates = sum(r["b"] for r in out.plate_crossings)
+        extras = {"plates": plates, "gas_sections": sections,
+                  "plate_b_fraction": float(b_plates / out.b_integral) if out.b_integral else 1.0}
+        if plates:
+            extras.update({k: max(p[key] for p in plates) for k, key in (
+                ("plate_peak_intensity_W_cm2", "intensity_W_cm2"), ("b_per_plate_rad", "b_rad"),
+                ("plate_self_focusing", "self_focusing"), ("plate_fluence_J_cm2", "fluence_J_cm2"),
+                ("plate_p_over_pcr", "p_over_pcr"))})
+        return extras
 
     # ---------------------------------------------------------------- validation phase
     def simulate(self, problem, cand, accuracy=None) -> fast1d.MPCOutput:

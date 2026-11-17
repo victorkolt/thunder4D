@@ -11,7 +11,7 @@ the design comes from: the problem, the predictions of fast1d and the margin to 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from math import log
 from typing import Any
 
@@ -20,6 +20,7 @@ import numpy as np
 from ..inputfile import default_input, run_input, save_input
 from .catalog.gases import get_gas
 from .catalog.mirrors import get_mirror
+from .catalog.solids import get_plate
 
 INCH = 0.0254
 PREDICTED = ("duration_fs", "ftl_duration_fs", "throughput", "peak_power_W", "compressor_gdd_fs2", "b_total_rad",
@@ -51,10 +52,13 @@ def spectral_window(problem, cand, level=1e-4, margin=0.15):
     return float(lo), float(hi)
 
 
-def to_input(problem, cand, *, preset="coarse", injection="linear", name=None, window=None,
+def to_input(problem, cand, *, preset="coarse", injection=None, name=None, window=None,
              precision="single", device="auto", run=None):
     """Standard THUNDER4D input (dict) for one design. window: (lambda_min_nm, lambda_max_nm),
-    default from the predicted spectrum. run: overrides of the "run" block."""
+    default from the predicted spectrum. run: overrides of the "run" block. injection: "linear" |
+    "nonlinear" (Kerr-matched); default "nonlinear" for cells with plates / gas sections, else "linear"."""
+    if injection is None:
+        injection = "nonlinear" if cand.segmented else "linear"
     las, L = problem.laser, problem.losses
     gas, coat = get_gas(cand.gas), get_mirror(cand.coating)
     tl = las.tl_duration_fs or las.duration_fs
@@ -67,20 +71,26 @@ def to_input(problem, cand, *, preset="coarse", injection="linear", name=None, w
         "candidate": {"gas": cand.gas, "pressure_bar": cand.pressure_bar, "roc_m": cand.roc_m,
                       "round_trips": cand.round_trips, "k": cand.k, "branch": cand.branch,
                       "n_passes": cand.n_passes, "coating": cand.coating, "diameter_inch": cand.diameter_inch,
-                      "score": cand.score if np.isfinite(cand.score) else None},
+                      "score": cand.score if np.isfinite(cand.score) else None,
+                      **({"layout": asdict(cand.layout),
+                          "equivalent_separation_m": cand.equivalent_separation_m} if cand.segmented else {})},
         "predicted_fast1d": {k: cand.metrics[k] for k in PREDICTED if k in cand.metrics},
         "limits": {k: {"value": v[0], "op": v[1], "limit": v[2], "mode": v[3], "margin": cand.slacks.get(k)}
                    for k, v in cand.limits.items()},
         "warnings": list(cand.warnings),
         "problem": {"laser": problem.to_dict()["laser"], "target": problem.to_dict()["target"]},
     }
+    filling = "vacuum" if gas.is_vacuum else f"{cand.gas}_{1e3 * cand.pressure_bar:.0f}mbar"
+    plates_tag = ("_" + cand.layout.label.replace(" ", "").replace("+", "_") if cand.segmented else "")
     cfg = default_input(
-        name=name or f"{cand.gas}_{1e3 * cand.pressure_bar:.0f}mbar_R{cand.roc_m:g}_M{cand.round_trips}k{cand.k}",
+        name=name or f"{filling}{plates_tag}_R{cand.roc_m:g}_M{cand.round_trips}k{cand.k}",
         laser={"energy_J": las.energy_J * L.mode_matching_efficiency, "duration_fs": tl,
                "wavelength_nm": las.wavelength_nm, "gdd_fs2": gdd, "tod_fs3": las.prechirp_tod_fs3},
         beam={"injection": injection},
-        medium={"gas": cand.gas, "pressure_bar": cand.pressure_bar,
-                "n2_1bar": gas.n2_per_bar * las.n2_polarization_factor},
+        medium={"gas": cand.gas, "pressure_bar": 0.0 if gas.is_vacuum else cand.pressure_bar,
+                "n2_1bar": None if gas.is_vacuum else gas.n2_per_bar * las.n2_polarization_factor},
+        plates=plate_entries(cand, las.n2_polarization_factor),
+        regions=region_entries(cand, las.n2_polarization_factor),
         cell={"roc_m": cand.roc_m, "separation_m": cand.separation_m, "n_passes": cand.n_passes,
               "herriott": {"round_trips": cand.round_trips, "k": cand.k, "branch": cand.branch}},
         mirrors={"reflectivity": _table_or_scalar(coat.reflectivity), "gdd_fs2": _table_or_scalar(coat.gdd_fs2),
@@ -95,6 +105,37 @@ def to_input(problem, cand, *, preset="coarse", injection="linear", name=None, w
     if las.polarization == "circular":
         cfg["notes"] = "circular polarisation: n2_1bar already includes the factor 2/3"
     return cfg
+
+
+def plate_entries(cand, polarization_factor=1.0):
+    """The "plates" block of the input file for a candidate ([] without plates)."""
+    out = []
+    for spec, z in zip(cand.layout.plates, cand.plate_positions_m):
+        pm = get_plate(spec.material)
+        if spec.coating == "bare":
+            coat = "bare"
+        elif spec.ar_reflectivity:
+            coat = {"reflectivity": spec.ar_reflectivity}
+        else:
+            coat = "ar"
+        entry = {"material": pm.name, "thickness_m": spec.thickness_mm * 1e-3, "position_m": float(z),
+                 "coating": coat, "n2": pm.n2_value * polarization_factor}
+        if pm.axis != "o":
+            entry["axis"] = pm.axis
+        out.append(entry)
+    return out
+
+
+def region_entries(cand, polarization_factor=1.0):
+    """The "regions" block of the input file (gas sections; [] without)."""
+    h = cand.separation_m / 2
+    out = []
+    for r in cand.layout.regions:
+        g = get_gas(r.gas)
+        out.append({"z0_m": r.z0_rel * h, "z1_m": r.z1_rel * h, "gas": r.gas,
+                    "pressure_bar": 0.0 if g.is_vacuum else cand.region_pressure(r),
+                    "n2_1bar": None if g.is_vacuum else g.n2_per_bar * polarization_factor})
+    return out
 
 
 def export_input(problem, cand, path, **kw):
@@ -208,7 +249,8 @@ def validate_4d(problem, cand, *, quick=None, preset="coarse", verbose=True, max
 
     quick = quick or Fast1DQuick()
     ref = quick.simulate(problem, cand, accuracy="default")
-    cfg = to_input(problem, cand, preset=preset, injection="nonlinear" if quick.matching == "nonlinear" else "linear",
+    cfg = to_input(problem, cand, preset=preset,
+                   injection="nonlinear" if quick.matching == "nonlinear" or cand.segmented else "linear",
                    **to_input_kw)
     t0 = time.time()
     b = run_input(cfg, verbose=verbose, max_seconds=max_seconds)

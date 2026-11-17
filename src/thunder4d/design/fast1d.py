@@ -227,6 +227,13 @@ class MPCInput:
     # mirror_reflectivity and mirror_gdd when given (measured R(lambda) and GDD curves).
     w0_in: float | None = None  # waist at cell centre [m]; None -> matched
     n2: float | None = None  # override, linear pol, at working pressure [m^2/W]
+    # any thunder4d MPC, e.g. with plates / gas sections (MPC(..., plates=..., regions=..., wavelength=...)).
+    # Its media, layout and separation replace gas / pressure / temperature / length / n2 / polarization
+    # (the media carry their own n2, polarisation factor included); roc and the mirror settings above
+    # still apply. Injection: the eigenmode of the loaded cell, Kerr-matched at match_power [W] (moment
+    # method, MPC.nonlinear_mode) or linear if None; w0_in (waist at the centre of the equivalent cell) wins.
+    cell: Any = None
+    match_power: float | None = None
 
     # physics switches
     kerr_lens: bool = True
@@ -326,6 +333,14 @@ class MPCOutput:
     warnings: list = field(default_factory=list)  # grid-edge diagnostics
     n_steps: int = 0
     runtime: float = 0.0
+    # run on a thunder4d cell (inp.cell, e.g. with plates / gas sections): peak_power_over_pcr and
+    # intensity_max are then taken in the gas only, and these hold the rest
+    segmented: bool = False
+    plate_crossings: list = field(default_factory=list)  # one dict per plate crossing: plate (index),
+    # name, pass, w_entry, w_exit, w_min [m], energy_entry [J], ppk_entry [W], b [rad], intensity [W/m^2],
+    # pcr [W], n0, thickness [m]
+    gas_intensity_max: dict = field(default_factory=dict)   # gas name -> peak intensity [W/m^2]
+    gas_p_over_pcr: dict = field(default_factory=dict)      # gas name -> max P/Pcr
 
     # -- convenience -------------------------------------------------------
     @property
@@ -495,42 +510,106 @@ def _simulate(inp: MPCInput) -> MPCOutput:
     single = inp.precision == "single"
     cdtype, _rdtype = (np.complex64, np.float32) if single else (np.complex128, np.float64)
 
-    # --- dispersion ----------------------------------------------------------
+    # --- media: one segment (gas cell) or the segments of inp.cell (plates / gas sections) --------
     valid = omega > 0.1 * w0c
-    nidx = np.ones(n)
-    nidx[valid] = refractive_index(inp.gas, 2 * np.pi * C0 / omega[valid], inp.pressure, inp.temperature)
-
-    def beta_of(w):
-        return refractive_index(inp.gas, 2 * np.pi * C0 / w, inp.pressure, inp.temperature) * w / C0
-
-    dw = 1e-4 * w0c
-    beta0 = beta_of(w0c)
-    beta1 = (beta_of(w0c + dw) - beta_of(w0c - dw)) / (2 * dw)
-    lin = np.where(valid, -1j * (nidx * omega / C0 - beta0 - beta1 * om), 0.0)
-    n0 = float(refractive_index(inp.gas, lam0, inp.pressure, inp.temperature))
-
-    # --- nonlinearity ----------------------------------------------------------
     pol = _pol_factor(inp.polarization)
-    n2 = (inp.n2 * pol) if inp.n2 is not None else kerr_index(inp.gas, inp.pressure, inp.temperature, inp.polarization)
-    pcr = lam0**2 / (2.0 * np.pi * n0 * n2)
     ss = np.clip(1.0 + om / w0c, 0.0, None) if inp.self_steepening else np.ones(n)
-    gamma_w2 = n2 * w0c / (C0 * inp.aeff_factor * np.pi)  # gamma = gamma_w2 / w^2
     mss = (-1j * ss).astype(cdtype)  # -i (1 + Omega / w0)
+    cell = inp.cell
+
+    if cell is None:
+        nidx = np.ones(n)
+        nidx[valid] = refractive_index(inp.gas, 2 * np.pi * C0 / omega[valid], inp.pressure, inp.temperature)
+
+        def beta_of(w):
+            return refractive_index(inp.gas, 2 * np.pi * C0 / w, inp.pressure, inp.temperature) * w / C0
+
+        dw = 1e-4 * w0c
+        beta0 = beta_of(w0c)
+        beta1 = (beta_of(w0c + dw) - beta_of(w0c - dw)) / (2 * dw)
+        lin = np.where(valid, -1j * (nidx * omega / C0 - beta0 - beta1 * om), 0.0)
+        n0 = float(refractive_index(inp.gas, lam0, inp.pressure, inp.temperature))
+        n2 = (inp.n2 * pol) if inp.n2 is not None else kerr_index(inp.gas, inp.pressure, inp.temperature,
+                                                                   inp.polarization)
+        pcr = lam0**2 / (2.0 * np.pi * n0 * n2)
+        d = inp.length
+        gas_seg: dict[str, Any] = {"key": 0, "length": d, "red": 1.0, "lin": lin, "n2": n2, "pcr": pcr,
+                   "gamma_w2": n2 * w0c / (C0 * inp.aeff_factor * np.pi), "kind": "gas", "name": inp.gas,
+                   "entry": None, "exit": None, "plate": None}
+        layouts: tuple[list[dict[str, Any]], ...] = ([gas_seg], [gas_seg])
+        zr_lin, w0_lin, wm_lin = cell_mode(inp.roc, d, lam0)
+        zr_in = zr_lin if inp.w0_in is None else np.pi * inp.w0_in**2 / lam0
+        q = -0.5 * d + 1j * zr_in  # at the entrance mirror plane
+    else:
+        # n2 of the media as given (thunder4d builds them with the polarisation factor); positions
+        # from MPC.layout: odd passes A -> B, even passes B -> A
+        d = cell.d
+        lam_valid = 2 * np.pi * C0 / omega[valid]
+        n_ref = float(cell.ref_medium.n_lam(lam0))
+        media: dict[int, dict[str, Any]] = {}
+
+        def medium_data(med):
+            if id(med) in media:
+                return media[id(med)]
+            nidx = np.ones(n)
+            nidx[valid] = med.n(omega[valid])
+            dw = 1e-4 * w0c
+            k0_, kp, km = (float(med.k(w)) for w in (w0c, w0c + dw, w0c - dw))
+            lin_m = np.where(valid, -1j * (nidx * omega / C0 - k0_ - (kp - km) / (2 * dw) * om), 0.0)
+            n0_m = float(med.n_lam(lam0))
+            n2_m = float(med.n2)
+            media[id(med)] = {"key": len(media), "lin": lin_m, "n2": n2_m, "red": n_ref / n0_m,
+                              "pcr": lam0**2 / (2.0 * np.pi * n0_m * n2_m) if n2_m else np.inf,
+                              "gamma_w2": n2_m * w0c / (C0 * inp.aeff_factor * np.pi), "n0": n0_m}
+            return media[id(med)]
+
+        def face(seg, which):
+            if seg[which + "_face"] is None:
+                return None
+            plate = seg["plate"]
+            amb = seg["amb_in"] if which == "entry" else seg["amb_out"]
+            tr = np.zeros(n, complex)
+            # thunder4d's phase convention (+GDD/2 Om^2) is the opposite of this module's
+            tr[valid] = np.conj(plate.face_transfer(seg[which + "_face"], amb, lam_valid, lam0))
+            return tr.astype(cdtype)
+
+        plates = list(cell.plates)
+        passes: list[list[dict[str, Any]]] = []
+        for p_ in (1, 2):
+            segs: list[dict[str, Any]] = []
+            for sg in cell.layout(p_, lam0):
+                md = medium_data(sg["medium"])
+                segs.append({**md, "length": sg["z1"] - sg["z0"], "kind": sg["kind"],
+                             "name": getattr(sg["medium"], "name", sg["kind"]),
+                             "entry": face(sg, "entry"), "exit": face(sg, "exit"),
+                             "plate": plates.index(sg["plate"]) if sg["plate"] is not None else None,
+                             "thickness": sg["plate"].t if sg["plate"] is not None else 0.0})
+            passes.append(segs)
+        layouts = tuple(passes)
+        main = medium_data(cell.medium)
+        n2, pcr = main["n2"], main["pcr"]
+        lm = cell.linear_mode(lam0)
+        zr_lin, w0_lin, wm_lin = lm["zR"], lm["w0"], lm["w_mirror"]
+        if inp.w0_in is not None:
+            q = -0.5 * cell.equivalent_separation(lam0) + 1j * np.pi * inp.w0_in**2 / lam0
+        else:   # (Kerr-matched) eigenmode right after mirror A, moment method: 1/q = S'/2S - i lam / (pi S)
+            S, Sp = cell._matched_moments(inp.match_power or 0.0, lam0)
+            q = 1.0 / (Sp / (2 * S) - 1j * lam0 / (np.pi * S))
 
     def nl_t(at, g):
         """Nonlinear term from the time-domain field (|A|^2 without the sqrt of abs)."""
         return (g * mss) * fft((at.real * at.real + at.imag * at.imag) * at)
 
-    # Half-step linear propagators, cached: steps are quantised to h_max 2^(-j/8)
+    # Half-step linear propagators, cached per medium: steps are quantised to h_max 2^(-j/8)
     # (never longer than requested), so the same few factors are reused all along.
     exp_cache = {}
 
-    def half_step(h, j):
+    def half_step(seg, h, j):
         if j is None:
-            return np.exp(lin * (0.5 * h)).astype(cdtype)
-        e = exp_cache.get(j)
+            return np.exp(seg["lin"] * (0.5 * h)).astype(cdtype)
+        e = exp_cache.get((seg["key"], j))
         if e is None:
-            e = exp_cache[j] = np.exp(lin * (0.5 * h)).astype(cdtype)
+            e = exp_cache[seg["key"], j] = np.exp(seg["lin"] * (0.5 * h)).astype(cdtype)
         return e
 
     def rk4ip(aw, at, h, g, e):
@@ -542,11 +621,6 @@ def _simulate(inp: MPCInput) -> MPCOutput:
         return e * (ai + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3)) + (h / 6.0) * k4
 
     # --- beam ------------------------------------------------------------------
-    d = inp.length
-    zr_lin, w0_lin, wm_lin = cell_mode(inp.roc, d, lam0)
-    zr_in = zr_lin if inp.w0_in is None else np.pi * inp.w0_in**2 / lam0
-    q = -0.5 * d + 1j * zr_in  # at the entrance mirror plane
-
     def w_of(qq):
         return np.sqrt(-lam0 / (np.pi * np.imag(1.0 / qq)))
 
@@ -564,6 +638,7 @@ def _simulate(inp: MPCInput) -> MPCOutput:
     aw = fft(a0.astype(cdtype))
     energy_in = np.sum(np.abs(a0) ** 2) * dt
     b_axis, i_max, ratio_max, f_max, nsteps, drift = 0.0, 0.0, 0.0, 0.0, 0, 0.0
+    gas_i, gas_ratio, crossings = {}, {}, []
     ppk0 = None
     np_ = inp.n_passes
     p_energy, p_b, p_wm, p_wmin, p_bw, p_fwhm = (np.zeros(np_) for _ in range(6))
@@ -572,52 +647,86 @@ def _simulate(inp: MPCInput) -> MPCOutput:
     nlev = 8  # step quantisation levels per octave
 
     for p in range(np_):
-        z, wmin = 0.0, np.inf
+        wmin = np.inf
         conserved = np.sum(np.abs(aw) ** 2 * weight)
         at = ifft(aw)
-        while z < d * (1.0 - 1e-12):
-            ppk = float(np.max(at.real * at.real + at.imag * at.imag))
-            w_now = w_of(q)
-            if not np.isfinite(w_now) or not np.isfinite(ppk):
-                raise BeamCollapse(f"beam collapse in pass {p + 1} at z = {z:.3f} m "
-                                   f"(P/Pcr reached {max(ratio_max, ppk / pcr):.2f})", max(ratio_max, ppk / pcr),
-                                   p, b_axis)
-            if ppk0 is None:
-                ppk0 = ppk
-            if ppk > inp.max_peak_growth * ppk0 or nsteps > inp.max_steps_per_pass * np_:
-                why = (f"peak power x{ppk / ppk0:.0f}" if ppk > inp.max_peak_growth * ppk0
-                       else f"more than {inp.max_steps_per_pass} steps per pass")
-                raise SimulationStopped(f"stopped in pass {p + 1}: {why} (optical shock or collapse, "
-                                        f"B = {b_axis:.0f} rad so far)", ratio_max, p, b_axis)
-            g = gamma_w2 / w_now ** 2
-            h_req = min(inp.dphi_max / (g * ppk), h_max)
-            j = int(np.ceil(-nlev * np.log2(h_req / h_max) - 1e-9))
-            h = h_max * 2.0 ** (-j / nlev)
-            if h >= d - z:  # last (partial) step of the pass: not cached
-                h, j = d - z, None
-            # beam: q followed with q_substeps sub-steps (free propagation + thin Kerr lens),
-            # the field step uses the exact mean of 1 / w^2 over the step
-            m_sub = inp.q_substeps
-            if inp.q_steps_per_zr:   # resolve the focus: beam sub-steps no longer than z_R / q_steps_per_zr
-                m_sub = max(m_sub, int(np.ceil(h * inp.q_steps_per_zr / zr_lin)))
-            hs, inv_w2 = h / m_sub, 0.0
-            for _ in range(m_sub):
-                q = q + 0.5 * hs
-                wm = w_of(q)
-                wmin = min(wmin, wm)
-                inv_w2 += hs / wm**2
-                if inp.kerr_lens:
-                    q = 1.0 / (1.0 / q - hs * lam0**2 * ppk / (np.pi**2 * wm**4 * pcr))
-                q = q + 0.5 * hs
-            aw = rk4ip(aw, at, h, gamma_w2 * inv_w2 / h, half_step(h, j))
-            at = ifft(aw)
-            b_axis += k0 * n2 * 2.0 * ppk / np.pi * inv_w2
-            i_max = max(i_max, 2.0 * ppk / (np.pi * wmin**2))
-            ratio_max = max(ratio_max, ppk / pcr)
-            z += h
-            nsteps += 1
+        for seg in layouts[p % 2]:
+            if seg["entry"] is not None:
+                aw = aw * seg["entry"]
+                at = ifft(aw)
+            if seg["kind"] == "plate":
+                ppk_in = float(np.max(at.real * at.real + at.imag * at.imag))
+                rec = {"plate": seg["plate"], "name": seg["name"], "pass": p + 1, "w_entry": float(w_of(q)),
+                       "energy_entry": float(np.sum(np.abs(aw).astype(float) ** 2) * dt / n), "ppk_entry": ppk_in,
+                       "pcr": seg["pcr"], "n0": seg.get("n0", 1.0), "thickness": seg.get("thickness", 0.0),
+                       "w_min": np.inf, "b": 0.0, "intensity": 0.0}
+            z, length = 0.0, seg["length"]
+            while z < length * (1.0 - 1e-12):
+                ppk = float(np.max(at.real * at.real + at.imag * at.imag))
+                w_now = w_of(q)
+                if not np.isfinite(w_now) or not np.isfinite(ppk):
+                    raise BeamCollapse(f"beam collapse in pass {p + 1} at z = {z:.3f} m of a {seg['kind']} segment "
+                                       f"(P/Pcr reached {max(ratio_max, ppk / seg['pcr']):.2f})",
+                                       max(ratio_max, ppk / seg["pcr"]), p, b_axis)
+                if ppk0 is None:
+                    ppk0 = ppk
+                if ppk > inp.max_peak_growth * ppk0 or nsteps > inp.max_steps_per_pass * np_:
+                    why = (f"peak power x{ppk / ppk0:.0f}" if ppk > inp.max_peak_growth * ppk0
+                           else f"more than {inp.max_steps_per_pass} steps per pass")
+                    raise SimulationStopped(f"stopped in pass {p + 1}: {why} (optical shock or collapse, "
+                                            f"B = {b_axis:.0f} rad so far)", ratio_max, p, b_axis)
+                g = seg["gamma_w2"] / w_now ** 2
+                h_req = min(inp.dphi_max / (g * ppk), h_max) if g > 0 else h_max
+                j = int(np.ceil(-nlev * np.log2(h_req / h_max) - 1e-9))
+                h = h_max * 2.0 ** (-j / nlev)
+                if h >= length - z:  # last (partial) step of the segment: not cached
+                    h, j = length - z, None
+                # beam: q followed with q_substeps sub-steps (free propagation + thin Kerr lens) over the
+                # reduced length (n_ref / n per physical length); the field step uses the exact mean of
+                # 1 / w^2 over the step
+                red = seg["red"]
+                m_sub = inp.q_substeps
+                if inp.q_steps_per_zr:   # resolve the focus: beam sub-steps no longer than z_R / q_steps_per_zr
+                    m_sub = max(m_sub, int(np.ceil(h * red * inp.q_steps_per_zr / zr_lin)))
+                hs, inv_w2, wstep = h / m_sub, 0.0, np.inf
+                hu = hs * red
+                for _ in range(m_sub):
+                    q = q + 0.5 * hu
+                    wm = w_of(q)
+                    wstep = min(wstep, wm)
+                    inv_w2 += hs / wm**2
+                    if inp.kerr_lens and seg["n2"]:
+                        q = 1.0 / (1.0 / q - hu * lam0**2 * ppk / (np.pi**2 * wm**4 * seg["pcr"]))
+                    q = q + 0.5 * hu
+                wmin = min(wmin, wstep)
+                aw = rk4ip(aw, at, h, seg["gamma_w2"] * inv_w2 / h, half_step(seg, h, j))
+                at = ifft(aw)
+                db = k0 * seg["n2"] * 2.0 * ppk / np.pi * inv_w2
+                b_axis += db
+                if seg["kind"] == "plate":
+                    rec["b"] += db
+                    rec["w_min"] = min(rec["w_min"], wstep)
+                    rec["intensity"] = max(rec["intensity"], 2.0 * ppk / (np.pi * wstep**2))
+                elif seg["n2"]:
+                    if cell is None:   # gas cell: unchanged diagnostics (running minimum over the pass)
+                        i_max = max(i_max, 2.0 * ppk / (np.pi * wmin**2))
+                    else:
+                        i_now = 2.0 * ppk / (np.pi * wstep**2)
+                        i_max = max(i_max, i_now)
+                        gas_i[seg["name"]] = max(gas_i.get(seg["name"], 0.0), i_now)
+                        gas_ratio[seg["name"]] = max(gas_ratio.get(seg["name"], 0.0), ppk / seg["pcr"])
+                    ratio_max = max(ratio_max, ppk / seg["pcr"])
+                z += h
+                nsteps += 1
+            if seg["kind"] == "plate":
+                rec["w_exit"] = float(w_of(q))
+                crossings.append(rec)
+            if seg["exit"] is not None:
+                aw = aw * seg["exit"]
+                at = ifft(aw)
         spec = np.abs(aw).astype(float) ** 2
-        drift = max(drift, abs(np.sum(spec * weight) / conserved - 1.0))
+        drift = max(drift, abs(np.sum(spec * weight) / conserved - 1.0)) if cell is None else \
+            drift   # faces remove energy: the conservation check holds inside the media only (gas cell)
         p_energy[p] = spec.sum() * dt / n
         p_b[p] = b_axis
         p_wm[p] = w_of(q)
@@ -733,6 +842,10 @@ def _simulate(inp: MPCInput) -> MPCOutput:
         warnings=warnings,
         n_steps=nsteps,
         runtime=time.perf_counter() - t_start,
+        segmented=cell is not None,
+        plate_crossings=crossings,
+        gas_intensity_max=gas_i,
+        gas_p_over_pcr=gas_ratio,
     )
 
 

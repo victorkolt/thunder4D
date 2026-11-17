@@ -11,12 +11,17 @@ The default threshold is a fraction of the barrier-suppression intensity
 which is only an order of magnitude. The intensity at which ionisation starts to matter in an
 MPC depends on the pulse duration and on how much loss/plasma you tolerate, so set
 ``ionization_threshold_W_cm2`` from your own experience or literature for each gas.
+
+"vacuum" is the filling of a bulk MPC (plates in an evacuated cell): n = 1, n2 = 0, no ionisation
+threshold and no pressure.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from ...materials import N2_1BAR, SELLMEIER, Material
+from ...materials import N2_1BAR, SELLMEIER, Material, vacuum
+
+VACUUM = "vacuum"
 
 
 def barrier_suppression_intensity(ip_eV, Z=1):
@@ -35,11 +40,17 @@ class Gas:
     notes: str = ""
 
     @property
+    def is_vacuum(self):
+        return self.name == VACUUM
+
+    @property
     def bsi_W_cm2(self):
         return barrier_suppression_intensity(self.ip_eV)
 
     @property
     def ionization_threshold(self):
+        if self.is_vacuum:
+            return None
         if self.ionization_threshold_W_cm2 is not None:
             return self.ionization_threshold_W_cm2
         return self.bsi_fraction * self.bsi_W_cm2
@@ -50,6 +61,8 @@ class Gas:
 
     def material(self, pressure_bar, temperature_K=293.15, polarization_factor=1.0):
         """thunder4d.Material at this pressure (n2 scaled by the polarisation factor)."""
+        if self.is_vacuum:
+            return vacuum()
         return Material(self.name, pressure_bar, temperature_K,
                         n2_1bar=self.n2_per_bar * polarization_factor,
                         sellmeier=SELLMEIER.get(self.name))
@@ -69,6 +82,7 @@ GASES: dict[str, Gas] = {
     "N2": Gas("N2", 15.581, raman_active=True),
     "air": Gas("air", 12.07, raman_active=True,
                notes="Ip of O2; ionisation of air is dominated by O2"),
+    VACUUM: Gas(VACUUM, 0.0, n2_1bar=0.0, notes="bulk MPC: plates in an evacuated cell"),
 }
 
 

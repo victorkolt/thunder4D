@@ -4,7 +4,8 @@ Every knob of the design helper lives here, grouped in dataclasses:
 
     LaserSpec     the input pulse (front end)
     Target        what "best" means (objective, quality floors)
-    Constraints   what is allowed (space, mirrors, Kerr, ionisation, spot pattern, pressure, gas)
+    Constraints   what is allowed (space, mirrors, Kerr, ionisation, spot pattern, pressure, gas,
+                  plates)
     Losses        what is lost on the way in (mode matching)
     SearchSpace   which configurations are tried (gases, RoC, round trips, k, passes, ...)
     Refinement    how the best candidates are fine-tuned with the fast 1+1D code
@@ -19,6 +20,21 @@ d = R (1 - cos(pi k / M)) on the planar branch (d < R), k < M / 2. One cycle is 
 spots on each mirror. The number of passes actually used
 can be anything from SearchSpace.min_passes to 2 M (odd: the beam leaves on the other mirror).
 
+Bulk and hybrid cells
+---------------------
+A cell can hold a Layout: plates (each with its own material, thickness, position and coating) and
+gas sections (each with its own gas and pressure) inside the main filling (the gas at the mirrors).
+Positions are fractions of d/2, signed, + towards mirror B (the mirror of the end of pass 1), so a
+layout keeps its shape when the cell length changes. Bulk MPC: main gas "vacuum"; hybrid: any gas
+plus plates, or gas sections plus plates (e.g. an evacuated cell between two windows in air).
+The search tries
+  * n identical plates when SearchSpace.plate_counts is not empty (materials and stock thicknesses
+    of PlateConstraints, outermost plates at SearchSpace.plate_positions_rel x d/2; 1 plate: towards
+    mirror B, 2: +-, more: evenly spaced in between),
+  * every Layout of SearchSpace.layouts (your own templates).
+The Herriott formula then sets the EQUIVALENT separation (diffraction); the mirrors are placed
+further apart so that the loaded cell is re-entrant (see thunder4d.plates).
+
 Conventions
 -----------
 * SI units unless the field name says otherwise (_fs, _nm, _bar, _mm, _J_cm2, _W_cm2, ...).
@@ -31,7 +47,7 @@ Conventions
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import asdict, dataclass, field, replace
 from typing import Literal
 
 import numpy as np
@@ -91,6 +107,76 @@ def Min(value=None, mode: Mode = "hard", safety=1.0, weight=1.0):
 
 def Off():
     return Limit(None, "max", "off")
+
+
+# ============================================================ cell layout (plates, gas sections)
+@dataclass(frozen=True)
+class PlateSpec:
+    """One plate. position_rel: centre / (d/2), signed, + towards mirror B."""
+    material: str                  # design plate catalogue (catalog.solids)
+    thickness_mm: float
+    position_rel: float = 0.0
+    coating: Literal["ar", "bare"] = "ar"
+    ar_reflectivity: float = 0.0   # residual reflectivity per AR-coated face
+
+
+@dataclass(frozen=True)
+class RegionSpec:
+    """A gas section [z0_rel, z1_rel] x d/2 (signed, -1 <= z0 < z1 <= 1) filled with another gas than
+    the main filling. pressure_bar None: follows Candidate.pressure_bar (the tuned pressure)."""
+    z0_rel: float
+    z1_rel: float
+    gas: str
+    pressure_bar: float | None = None
+
+
+@dataclass(frozen=True)
+class Layout:
+    """Plates and gas sections of a cell (empty: a plain gas cell).
+
+    Layout.identical(2, "FS", 1.0, 0.7)                        # two 1 mm FS plates at +-0.7 d/2
+    Layout((PlateSpec("FS", 1.0, -0.73), PlateSpec("CaF2", 2.0, 0.73)),
+           regions=(RegionSpec(-0.73, 0.73, "vacuum"),))       # evacuated cell between two windows
+    """
+    plates: tuple[PlateSpec, ...] = ()
+    regions: tuple[RegionSpec, ...] = ()
+    name: str = ""
+
+    @classmethod
+    def identical(cls, n, material, thickness_mm, position_rel, coating="ar", ar_reflectivity=0.0, regions=()):
+        """n identical plates, the outermost at +-position_rel (1 plate: at +position_rel)."""
+        z = [position_rel] if n == 1 else list(np.linspace(-position_rel, position_rel, n))
+        return cls(tuple(PlateSpec(material, float(thickness_mm), float(x), coating, ar_reflectivity) for x in z),
+                   tuple(regions))
+
+    def __bool__(self):
+        return bool(self.plates or self.regions)
+
+    @property
+    def label(self):
+        if self.name:
+            return self.name
+        parts = []
+        mats = [(p.material, p.thickness_mm) for p in self.plates]
+        for key in dict.fromkeys(mats):
+            parts.append(f"{mats.count(key)}x{key[0]} {key[1]:g}mm")
+        if self.regions:
+            parts.append("+" + ",".join(dict.fromkeys(r.gas for r in self.regions)))
+        return " ".join(parts) or "-"
+
+    def shifted_thickness(self, stock, steps):
+        """Every plate moved `steps` positions along the sorted stock list (None if one leaves it;
+        plates whose thickness is not in the list keep it)."""
+        stock = sorted(stock)
+        plates = []
+        for p in self.plates:
+            if p.thickness_mm in stock:
+                i = stock.index(p.thickness_mm) + steps
+                if not 0 <= i < len(stock):
+                    return None
+                p = replace(p, thickness_mm=float(stock[i]))
+            plates.append(p)
+        return replace(self, plates=tuple(plates))
 
 
 # ============================================================ input laser
@@ -263,6 +349,24 @@ class GasConstraints:
 
 
 @dataclass
+class PlateConstraints:
+    """Plates of bulk / hybrid cells (what you can buy, and what they withstand)."""
+    allowed_materials: tuple[str, ...] = ("FS",)                       # design plate catalogue
+    allowed_thicknesses_mm: tuple[float, ...] = (0.5, 1.0, 2.0, 3.0, 5.0, 6.35)   # stock
+    allowed_coatings: tuple[str, ...] = ("ar",)                        # "ar" | "bare" (Fresnel)
+    ar_reflectivity: float = 0.0                # residual reflectivity per AR-coated face
+    # peak intensity inside a plate; value None -> threshold of the material (catalogue)
+    peak_intensity_W_cm2: Limit = field(default_factory=lambda: Max(None))
+    # peak fluence on the plate faces; value None -> LIDT of the material (catalogue), if known
+    fluence: Limit = field(default_factory=lambda: Max(None))
+    # thickness / self-focusing distance (Marburger, at the beam entering the plate): thin-plate regime
+    self_focusing: Limit = field(default_factory=lambda: Max(0.1))
+    b_per_plate_rad: Limit = field(default_factory=Off)              # on-axis, per crossing
+    # distance from a plate face to the nearest mirror (mounts) [m]
+    mirror_clearance_m: Limit = field(default_factory=lambda: Min(0.02))
+
+
+@dataclass
 class Constraints:
     space: SpaceConstraints = field(default_factory=SpaceConstraints)
     mirrors: MirrorConstraints = field(default_factory=MirrorConstraints)
@@ -271,6 +375,7 @@ class Constraints:
     spots: SpotConstraints = field(default_factory=SpotConstraints)
     pressure: PressureConstraints = field(default_factory=PressureConstraints)
     gas: GasConstraints = field(default_factory=GasConstraints)
+    plates: PlateConstraints = field(default_factory=PlateConstraints)
 
 
 # ============================================================ losses
@@ -305,6 +410,15 @@ class SearchSpace:
     # the input mirror; -1: one pass less, out on the other mirror)
     pass_offsets: tuple[int, ...] = (0, -1)
     min_passes: int = 5
+    # plates (bulk / hybrid): numbers of plates tried; () = gas cells only (no plates)
+    plate_counts: tuple[int, ...] = ()
+    plate_materials: tuple[str, ...] | None = None        # None -> Constraints.plates.allowed_materials
+    plate_thicknesses_mm: tuple[float, ...] | None = None # None -> Constraints.plates.allowed_thicknesses_mm
+    plate_coatings: tuple[str, ...] | None = None         # None -> Constraints.plates.allowed_coatings
+    plate_positions_rel: tuple[float, ...] = (0.5,)       # |position| / (d/2) of the outermost plates
+    include_no_plates: bool = False   # with plate_counts / layouts: also try the gas cell without plates
+    # your own layouts (plates with individual materials, gas sections), tried for every gas and geometry
+    layouts: tuple[Layout, ...] = ()
 
 
 # ============================================================ refinement with the 1+1D code
@@ -315,9 +429,11 @@ class Refinement:
     n_candidates: int = 5
     diversity: bool = True          # spread the candidates over gases, then RoC / branch
     # continuous parameters tuned by the optimiser: "pressure_bar", "prechirp_gdd_fs2"
+    # (pressure is not tuned in a vacuum-filled bulk cell)
     tune: tuple[str, ...] = ("pressure_bar",)
     neighbour_n_passes: int = 2     # passes +- this, same geometry, within [min_passes, 2 M]
     neighbour_roc_steps: int = 0    # RoC +- this many steps of the allowed list (same M, k)
+    neighbour_thickness_steps: int = 1   # plate thickness +- this many steps of the stock list
     method: Literal["nelder-mead", "powell"] = "nelder-mead"
     max_evaluations: int = 60
     xtol_rel: float = 1e-3
@@ -345,18 +461,3 @@ class DesignProblem:
                 return [clean(x) for x in v]
             return v
         return clean(asdict(self))
-
-    @classmethod
-    def from_dict(cls, data: dict) -> DesignProblem:
-        """Inverse of to_dict (also takes the "problem" of a saved result). Missing keys keep their default,
-        unknown keys are ignored."""
-        def fill(obj, values):
-            for key, value in values.items():
-                if not hasattr(obj, key):
-                    continue
-                if is_dataclass(getattr(obj, key)):
-                    fill(getattr(obj, key), value)
-                else:
-                    setattr(obj, key, tuple(value) if isinstance(value, list) else value)
-            return obj
-        return fill(cls(), data.get("problem", data))
