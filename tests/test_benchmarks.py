@@ -18,6 +18,9 @@ import pytest
 
 BENCH_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "benchmark")
 RTOL = 1e-3          # quick runs are deterministic; this only absorbs FFT / BLAS rounding differences
+ATOL = 1e-9          # floor for quantities that are zero up to rounding (e.g. the HG00 fraction of a vortex,
+                     # ~1e-12 with machine-dependent noise); every regression metric is either O(1e-3) or more,
+                     # or a fraction where 1e-9 is far below any physical change
 
 
 def _load(name):
@@ -70,7 +73,7 @@ def test_quick_run_matches_snapshot(quick_results, name):
     new = an.quick_snapshot(quick_results[0][name])
     assert new["grid_shape"] == ref["grid_shape"], "the quick grid changed"
     changed = {k: (v, new["metrics"].get(k)) for k, v in ref["metrics"].items()
-               if not np.isclose(new["metrics"].get(k, np.nan), v, rtol=RTOL, atol=0)}
+               if not np.isclose(new["metrics"].get(k, np.nan), v, rtol=RTOL, atol=ATOL)}
     assert not changed, ("quick-run outputs changed (reference, now): "
                          + ", ".join(f"{k} {a:.6g} -> {b}" for k, (a, b) in changed.items())
                          + ". If intended: python analyze.py --update-quick")

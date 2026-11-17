@@ -7,7 +7,15 @@ given at the cell centre, as built by Pulse.at_focus & co.; it is moved to the i
 a linear half pass. Diagnostics are taken at the cell centre (waist plane, where the modal
 decomposition on the cell eigenmodes is exact): after every pass, the field is imaged back to the
 centre by a linear half pass, i.e. the far field of the beam that leaves the cell after that pass.
-Full 3D fields are only written to disk for the passes you ask for."""
+Full 3D fields are only written to disk for the passes you ask for.
+
+Cells with plates / gas regions (bulk / hybrid MPC): one solver per medium (gases + plate materials),
+seen by the driver as one (_SolverSet: B, nsteps, z summed). A pass walks the segments of
+cell.layout(pass): face transfer (Fresnel / coating), propagation in the plate (its own dispersion,
+group-velocity frame and n2), face transfer, and the filling medium between. The "centre" is the
+centre of the equivalent cell (MPC.centre_z), cut out of a plate if it falls inside one; the linear
+half passes to/from the centre walk the same segments (faces inverted backwards)."""
+
 import os
 import pickle
 import time
@@ -19,6 +27,113 @@ from . import diagnostics as dg
 from .backend import to_host
 from .pulse import Pulse
 from .solver import UPPESolver
+
+
+class _SolverSet:
+    """Solvers of a cell with plates, one per medium, seen as one solver by the driver: B, nsteps,
+    z are summed; everything else (absorb, peak_intensity, mirror, s_m, ...) is the main solver's
+    (filling medium)."""
+
+    def __init__(self, main, by_medium):
+        self.main, self.by_medium = main, by_medium        # {id(medium): solver}
+        self.all = [main] + [s for s in by_medium.values() if s is not main]
+
+    def for_medium(self, medium):
+        return self.by_medium[id(medium)]
+
+    def __getattr__(self, name):
+        return getattr(self.main, name)
+
+    def _sum(self, attr):
+        return sum(getattr(s, attr) for s in self.all)
+
+    def _set(self, attr, value):
+        setattr(self.main, attr, value - sum(getattr(s, attr) for s in self.all[1:]))
+
+    B = property(lambda self: self._sum("B"), lambda self, v: self._set("B", v))
+    nsteps = property(lambda self: self._sum("nsteps"), lambda self, v: self._set("nsteps", v))
+    z = property(lambda self: self._sum("z"), lambda self, v: self._set("z", v))
+
+    @property
+    def _Ipeak(self):
+        return self.main._Ipeak
+
+    @_Ipeak.setter
+    def _Ipeak(self, value):
+        for s in self.all:
+            s._Ipeak = value
+
+
+def make_solvers(grid, cell, cls, kw):
+    """The solver of the cell (cls = UPPESolver or LensFrameSolver), or with plates / gas regions a
+    _SolverSet with one solver per medium (main: the reference medium, at the mirrors)."""
+    if not cell.segmented:
+        return cls(grid, cell.medium, **kw) if cls is UPPESolver else cls(grid, cell, **kw)
+    by = {}
+    for seg in cell.layout(1, grid.lambda0):
+        med = seg["medium"]
+        if id(med) not in by:
+            by[id(med)] = cls(grid, med, **kw) if cls is UPPESolver else cls(grid, cell, medium=med, **kw)
+    return _SolverSet(by[id(cell.ref_medium)], by)
+
+
+class Walker:
+    """Walks the segments of a pass of a cell with plates / gas regions: face transfers (Fresnel or
+    coatings, with the gas on each side), and propagation in each medium with its solver, in
+    physical z (lens=False) or in zeta of the equivalent cell (lens=True). Positions are REDUCED
+    coordinates u (0 at the mirror just left, d_eq at the next one); walking backwards (ub < ua)
+    is linear, with inverted face transfers."""
+
+    def __init__(self, grid, cell, solvers, lens=False):
+        self.grid, self.cell, self.solvers, self.lens = grid, cell, solvers, lens
+        self.ueq = cell.equivalent_separation(grid.lambda0)
+        self.uc = self.ueq / 2
+        self._faces = {}
+
+    def face(self, Aw, plate, face, ambient, inverse=False):
+        key = (id(plate), face, id(ambient))
+        if key not in self._faces:
+            g = self.grid
+            lam = np.where(g.valid, g.lam, g.lambda0)
+            t = np.where(g.valid, plate.face_transfer(face, ambient, lam, g.lambda0), 1.0)
+            self._faces[key] = (g.asarray(t.astype(g.dtype)[None, None, :]),
+                                g.asarray((1 / t).astype(g.dtype)[None, None, :]))
+        Aw *= self._faces[key][1 if inverse else 0]
+        return Aw
+
+    def walk(self, Aw, p, ua, ub, nonlinear):
+        segs = self.cell.layout(p, self.grid.lambda0, split_at=(ua, ub))
+        eps = 1e-12 * self.cell.d
+        fwd = ub >= ua
+        lo, hi = (ua, ub) if fwd else (ub, ua)
+        sel = [s for s in segs if s["u0"] >= lo - eps and s["u1"] <= hi + eps]
+        for s in (sel if fwd else sel[::-1]):
+            if fwd:
+                first, a_first, last, a_last = s["entry_face"], s.get("amb_in"), s["exit_face"], s.get("amb_out")
+            else:
+                first, a_first, last, a_last = s["exit_face"], s.get("amb_out"), s["entry_face"], s.get("amb_in")
+            if first:
+                Aw = self.face(Aw, s["plate"], first, a_first, inverse=not fwd)
+            Aw = self.segment(Aw, s, fwd, nonlinear)
+            if last:
+                Aw = self.face(Aw, s["plate"], last, a_last, inverse=not fwd)
+        return Aw
+
+    def segment(self, Aw, seg, forward, nonlinear):
+        S = self.solvers.for_medium(seg["medium"])
+        if self.lens:
+            zr = S.zR
+            ua, ub = (seg["u0"], seg["u1"]) if forward else (seg["u1"], seg["u0"])
+            za, zb = zr * np.arctan((ua - self.uc) / zr), zr * np.arctan((ub - self.uc) / zr)
+            if nonlinear:
+                S._Ipeak = None            # new segment: fresh peak intensity for the step size
+                return S.propagate_zeta(Aw, za, zb)
+            return S.propagate_linear_zeta(Aw, za, zb)
+        L = seg["z1"] - seg["z0"]
+        if nonlinear:
+            S._Ipeak = None
+            return S.propagate(Aw, L)
+        return S.linear(Aw, L if forward else -L)
 
 
 class MPCSimulation:
@@ -53,13 +168,19 @@ class MPCSimulation:
     peak_intensity (max of |E(x, y, t)|^2 at the cell centre [W/m^2], one value per record).
     """
 
+    _lens = False      # segments propagated in physical z (True: in the lens frame)
+
     def __init__(self, pulse, cell, *, solver=None, record_every=1, near_field=True, max_order=6,
                  mode_reference="linear", save_fields=(), save_dir=".", record_mirror=True,
                  slit=None, profile_wavelengths=(), profile_bandwidth=0.0, profile_axis="x",
                  **solver_kw):
         self.grid = pulse.grid
         self.cell = cell
-        self.solver = solver or UPPESolver(self.grid, cell.medium, **solver_kw)
+        self.passes_done = 0
+        self.solver = solver or self._make_solvers(UPPESolver, solver_kw)
+        if cell.segmented:
+            self._walker = Walker(self.grid, cell, self.solver, lens=self._lens)
+            self._uc, self._ueq = self._walker.uc, self._walker.ueq
         centre = self.grid.asarray(pulse.Aw).copy()       # lives on the grid's device
         self.state = self._from_centre(centre.copy())     # right after a mirror (injection plane)
         self._centre = (0, centre)                        # (passes, field seen at the centre)
@@ -74,7 +195,6 @@ class MPCSimulation:
         else:
             w_ref = float(mode_reference)
             self.w0_of_lambda = lambda lam: w_ref * np.sqrt(lam / lam0)
-        self.passes_done = 0
         self.history = {k: [] for k in (
             "pass", "energy", "B", "peak_power", "peak_intensity", "spectrum", "fluence", "fluence_mirror",
             "sgram_x", "sgram_theta", "eta00", "eta00_total", "order_frac", "V_near", "V_far",
@@ -169,9 +289,9 @@ class MPCSimulation:
             if max_seconds is not None and time.time() - t_start > max_seconds:
                 break
             p = self.passes_done + 1
-            A = self._to_centre(self.state)
+            A = self._half_pass(self.state, p, 0)
             A = self.solver.absorb(A)
-            A = self._to_mirror(A)
+            A = self._half_pass(A, p, 1)
             Fm = dg.fluence(self.grid, A).astype(np.float32) if self.record_mirror else None
             Pm = self._mirror_profiles(A) if (self.record_mirror and self.prof_lams) else None
             A = self._bounce(A)
@@ -188,6 +308,19 @@ class MPCSimulation:
                           f"steps {self.solver.nsteps} | {h['wall_s'][-1]:.0f} s", flush=True)
         return self
 
+    # ------------------------------------------------------------ cells with plates / gas regions
+    def _make_solvers(self, cls, kw):
+        return make_solvers(self.grid, self.cell, cls, kw)
+
+    def _walk(self, Aw, p, ua, ub, nonlinear):
+        return self._walker.walk(Aw, p, ua, ub, nonlinear)
+
+    def _half_pass(self, Aw, p, half):
+        """half 0: mirror -> centre, half 1: centre -> mirror (nonlinear)."""
+        if not self.cell.segmented:
+            return self._to_centre(Aw) if half == 0 else self._to_mirror(Aw)
+        return self._walk(Aw, p, 0.0, self._uc, True) if half == 0 else self._walk(Aw, p, self._uc, self._ueq, True)
+
     # one pass = mirror -> centre, centre -> mirror, bounce (LensFrameSimulation overrides these),
     # plus the two linear half passes between the injection plane and the centre
     def _to_centre(self, Aw):
@@ -201,10 +334,14 @@ class MPCSimulation:
 
     def _from_centre(self, Aw):
         """Cell centre -> plane right after a mirror (linear, backwards)."""
+        if self.cell.segmented:
+            return self._walk(Aw, self.passes_done + 1, self._uc, 0.0, False)
         return self.solver.linear(Aw, -self.cell.d / 2)
 
     def _centre_view(self, Aw):
         """Plane right after a mirror -> cell centre (linear, on a copy)."""
+        if self.cell.segmented:
+            return self._walk(Aw.copy(), self.passes_done + 1, 0.0, self._uc, False)
         return self.solver.linear(Aw.copy(), self.cell.d / 2)
 
     @property
@@ -217,6 +354,8 @@ class MPCSimulation:
         st = {"state": to_host(self.state), "history": self.history, "passes_done": self.passes_done,
               "B": self.solver.B, "nsteps": self.solver.nsteps, "z": self.solver.z,
               "Ipeak": self.solver._Ipeak}
+        if hasattr(self.solver, "all"):   # one solver per medium: keep each one's counters
+            st["per_medium"] = [(s.B, s.nsteps, s.z) for s in self.solver.all]
         with open(path, "wb") as f:
             pickle.dump(st, f, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -235,7 +374,12 @@ class MPCSimulation:
             self._centre = (-1, None)
         else:                     # checkpoint written before the injection-plane convention
             self.Aw = st["Aw"]
-        self.solver.B, self.solver.nsteps, self.solver.z = st["B"], st["nsteps"], st["z"]
+        per = st.get("per_medium")
+        if hasattr(self.solver, "all") and per is not None and len(per) == len(self.solver.all):
+            for s, (b, n, z) in zip(self.solver.all, per):
+                s.B, s.nsteps, s.z = b, n, z
+        else:                     # single solver, or a checkpoint without the split (all in the main solver)
+            self.solver.B, self.solver.nsteps, self.solver.z = st["B"], st["nsteps"], st["z"]
         self.solver._Ipeak = st["Ipeak"]
         return self
 
@@ -264,6 +408,11 @@ class MPCSimulation:
             out["prof_wavelengths"] = np.array(self.prof_lams)
             out["prof_bandwidth"] = self.prof_bw
             out["prof_coord"] = self.prof_coord
+        if self.cell.regions:
+            out["regions"] = np.array([f"[{z0}, {z1}] m | {med}" for z0, z1, med in self.cell.regions])
+        if self.cell.plates:
+            out["plates"] = np.array([f"{p.name} | {p.material} | z = {p.position} m | "
+                                      f"{p.coating_A.name}/{p.coating_B.name}" for p in self.cell.plates])
         fm = [v for v in h["fluence_mirror"] if v is not None]
         if fm:
             out["fluence_mirror"] = np.array(fm)
