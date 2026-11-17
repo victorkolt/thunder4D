@@ -10,7 +10,8 @@ from .cell import MPC
 from .grid import C0, Grid, suggest_grid
 from .inputfile import build_simulation, default_input, load_input, run_input, save_input
 from .lensframe import LensFrameSimulation, LensFrameSolver, imaged_near_field_lens, lens_frame_scale, suggest_lens_grid
-from .materials import Material
+from .materials import SOLIDS, Material, Solid, vacuum
+from .plates import Coating, Plate
 from .pulse import (
     Beam,
     Pulse,

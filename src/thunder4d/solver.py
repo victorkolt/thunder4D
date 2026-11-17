@@ -54,6 +54,7 @@ class UPPESolver:
         w, w0 = g.omega, g.omega0
         self.k = medium.k(np.where(g.valid, w, w0))   # k(w) on the grid, k0 outside the window
         self.k0 = float(medium.k(w0))
+        self.kv0 = w0 / C0          # vacuum wavenumber: Kerr phase per step = kv0 n2 I dz
         h = w0 * 1e-4
         self.k1 = float((medium.k(w0 + h) - medium.k(w0 - h)) / (2 * h))
         self.n2 = medium.n2
@@ -180,13 +181,13 @@ class UPPESolver:
         dz_max = self.dz_max or L / 4
         z, pending = 0.0, 0.0
         while z < L * (1 - 1e-12):
-            h_req = self.phi_max / (self.k0 * self.n2 * max(self._Ipeak, 1e-30))
+            h_req = self.phi_max / (self.kv0 * self.n2 * max(self._Ipeak, 1e-30))
             # quantise to dz_max * 2^(-n/4) so that exp(i D h) can be reused from the cache
             h = dz_max * 2.0 ** (-np.ceil(max(0.0, 4 * np.log2(dz_max / h_req))) / 4)
             h = min(h, L - z)
             Aw = self.linear(Aw, pending + h / 2)
             Aw = self._rk4(Aw, h)
-            self.B += self.k0 * self.n2 * self._Ipeak * h
+            self.B += self.kv0 * self.n2 * self._Ipeak * h
             pending = h / 2
             z += h
             self.nsteps += 1

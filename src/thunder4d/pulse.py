@@ -327,6 +327,43 @@ class Pulse:
         return cls(grid, Aw).set_energy(energy)
 
     @classmethod
+    def cell_matched(cls, grid, E, cell, energy, *, nonlinear=True, power="peak", vortex=0, verbose=True):
+        """Gaussian input matched to the cell eigenmode, given at the cell centre (size ~ sqrt(lambda)).
+
+        nonlinear=False: linear eigenmode (waist w0 at the centre). nonlinear=True: Kerr-matched mode
+        at the peak ('peak') or intensity-weighted ('weighted') power of the pulse, or at an explicit
+        power [W]. For a cell with
+        plates this is the beam that, propagated linearly back to the injection plane (as the
+        simulation does), gives the matched beam there: a gaussian of radius input_w with a
+        spherical wavefront of radius input_R (MPC.nonlinear_mode). Without plates: the matched
+        waist at the centre, as in the input files.
+        vortex = l: LG_0,l beam (exp(i l phi)) of the same radius parameter, matched with the
+        critical power of that mode (MPC.nonlinear_mode)."""
+        lam0 = grid.lambda0
+        w = cell.linear_mode(lam0)["w0"]
+        Rc = np.inf
+        if nonlinear:
+            probe = cls.at_focus(grid, E, Beam(gaussian(w), chromatic_size="eigenmode"), energy)
+            if isinstance(power, (int, float)):
+                P = float(power)               # explicit matching power [W]
+            else:
+                P = probe.peak_power() if power == "peak" else probe.weighted_power()
+            m = cell.nonlinear_mode(P, lam0, vortex=vortex)
+            w, Rc = (m["input_w"], m["input_R"]) if cell.segmented else (m["w0"], np.inf)
+            if verbose:
+                print(cell.report(m))
+        medium = cell.ref_medium
+
+        def curvature(X, Y, Om):
+            if not np.isfinite(Rc):
+                return np.zeros(np.shape(X))
+            return float(medium.k(grid.omega0 + Om)) * (X ** 2 + Y ** 2) / (2 * Rc)
+        prof = laguerre_gauss(w, 0, vortex) if vortex else gaussian(w)
+        p = cls.at_focus(grid, E, Beam(prof, chromatic_size="eigenmode", custom_phase=curvature), energy)
+        p.input_w, p.input_R = w, Rc
+        return p
+
+    @classmethod
     def from_near_field(cls, grid, E, beam, energy, nf_size, nf_points=256, focal_length=None,
                         target_waist=None, verbose=True):
         """(Fourier-plane injection: see imaged_near_field for a near field imaged on the mirror.)
@@ -373,6 +410,9 @@ class Pulse:
 
         Size the profile to the mode: for a top-hat, radius ~ 1.12 x mode radius at that plane
         maximises the overlap with the gaussian (eta = 0.815)."""
+        if getattr(cell, "segmented", False):
+            return cls._imaged_near_field_segmented(grid, E, beam, energy, cell, image_z, curvature_radius,
+                                                    verbose)
         z = cell.d / 2 if image_z is None else float(image_z)
         if curvature_radius is None:
             zR = cell.linear_mode(grid.lambda0)["zR"]
@@ -391,6 +431,36 @@ class Pulse:
         if verbose:
             print(f"[Pulse] near field imaged at z = {z*100:.1f} cm from the centre, "
                   f"wavefront R = {curvature_radius:.3f} m")
+        return p
+
+    @classmethod
+    def _imaged_near_field_segmented(cls, grid, E, beam, energy, cell, image_z, curvature_radius, verbose):
+        """imaged_near_field for a cell with plates / gas regions: image plane at the physical
+        position image_z of pass 1 (towards mirror B), eigenmode wavefront of the equivalent cell
+        there, then the linear walk back to the centre that the simulation inverts exactly."""
+        from .simulation import Walker, make_solvers
+        lam0 = grid.lambda0
+        z = cell.d / 2 if image_z is None else float(image_z)
+        u = cell.u_of_z(z, 1, lam0)
+        uc = cell.equivalent_separation(lam0) / 2
+        zr = u - uc                                   # distance to the centre in the equivalent cell
+        if curvature_radius is None:
+            zR = cell.linear_mode(lam0)["zR"]
+            curvature_radius = zr + zR ** 2 / zr if zr != 0 else np.inf
+        k = cell.ref_medium.k(np.where(grid.valid, grid.omega, grid.omega0))
+        Aw = np.zeros(grid.shape, grid.dtype)
+        for j in cls._support(E):
+            U = beam.field(grid.X, grid.Y, grid.omega[j], grid.omega0)
+            if np.isfinite(curvature_radius):
+                U = U * np.exp(1j * k[j] * grid.r2 / (2 * curvature_radius))
+            U /= np.sqrt(np.sum(np.abs(U) ** 2) * grid.dA)
+            Aw[:, :, j] = E[j] * U
+        walker = Walker(grid, cell, make_solvers(grid, cell, UPPESolver, {"cache_size": 0}))
+        p = cls(grid, walker.walk(grid.asarray(Aw), 1, u, uc, False))
+        p.set_energy(energy)
+        if verbose:
+            print(f"[Pulse] near field imaged at z = {z*100:.1f} cm (pass 1), wavefront R = {curvature_radius:.3f} m"
+                  f" (equivalent cell)")
         return p
 
     @staticmethod

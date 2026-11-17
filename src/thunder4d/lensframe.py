@@ -5,7 +5,17 @@ zR = sqrt(d(2R-d))/2, zeta = zR atan(z/zR). B obeys (paraxial, exact):
     dB/dzeta = i/(2k) Lap B - i k r^2/(2 zR^2) B + i beta(Om) s^2 B + i gamma |B|^2 B
 The Kerr term is unchanged in zeta; the curved mirror is the identity in this frame; at the cell
 centre B is the physical field. The grid only has to hold the beam at the waist scale.
+
+Plates (bulk / hybrid MPC): z is the REDUCED coordinate of the equivalent cell (see thunder4d.cell),
+in which a plate of thickness t is a stretch t n_g/n_p of the filling medium, so the frame (zR, s,
+curvature) is the one of the equivalent cell and is exact across the plates. A solver built with
+medium=<plate material> keeps the diffraction of the filling medium and applies the plate's own
+dispersion (in its own group-velocity frame) and Kerr effect per PHYSICAL length, i.e. times
+dz_scale = n_p/n_g per reduced length. Neglected: the colour dependence of n_g/n_p in the reduced
+length (relative error ~ dn/n x t/zR on the diffraction inside the plate).
 """
+from typing import Any
+
 import numpy as np
 
 from .grid import _sized_grid
@@ -14,11 +24,12 @@ from .simulation import MPCSimulation
 from .solver import UPPESolver
 
 
-def lens_frame_scale(cell):
-    """Geometric reference of the cell: zR, zeta at the mirror, mirror scale factor s_m."""
-    zR = np.sqrt(cell.d * (2 * cell.R - cell.d)) / 2
-    zeta_m = zR * np.arctan(cell.d / (2 * zR))
-    s_m = np.sqrt(1 + (cell.d / (2 * zR)) ** 2)
+def lens_frame_scale(cell, lam=None):
+    """Geometric reference of the (equivalent) cell: zR, zeta at the mirror, mirror scale s_m."""
+    d = cell.equivalent_separation(lam)
+    zR = np.sqrt(d * (2 * cell.R - d)) / 2
+    zeta_m = zR * np.arctan(d / (2 * zR))
+    s_m = np.sqrt(1 + (d / (2 * zR)) ** 2)
     return zR, zeta_m, s_m
 
 
@@ -37,17 +48,28 @@ class LensFrameSolver(UPPESolver):
     """Split step in zeta: [kinetic+dispersion](h/2) [potential(h/2) Kerr-RK4(h) potential(h/2)]
     [kinetic+dispersion](h/2), kinetic halves merged (one 2D FFT pair per step).
     phi_max: peak nonlinear phase per step; gouy_step: max step in accumulated Gouy phase [rad].
-    kernels: 'auto' | 'numba' | 'numpy', see UPPESolver."""
+    kernels: 'auto' | 'numba' | 'numpy', see UPPESolver.
+    medium: None (filling medium of the cell) or a plate material: propagation inside that plate,
+    in the frame of the cell (see the module docstring)."""
 
-    def __init__(self, grid, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True,
+    def __init__(self, grid, cell, *, medium=None, phi_max=0.02, gouy_step=0.05, self_steepening=True,
                  absorber_frac=0.9, absorber_order=16, kernels="auto"):
         # UPPESolver.__init__ is not called: it would build the 3D operator we want to avoid
-        self._setup(grid, cell.medium, phi_max, self_steepening, absorber_frac, absorber_order, kernels)
+        med = cell.medium if medium is None else medium
+        self._setup(grid, med, phi_max, self_steepening, absorber_frac, absorber_order, kernels)
         self.cell = cell
-        self.zR, self.zeta_m, self.s_m = lens_frame_scale(cell)
+        self.zR, self.zeta_m, self.s_m = lens_frame_scale(cell, grid.lambda0)
         self.h_max = gouy_step * self.zR
-        g, k = grid, self.k
-        self._beta = np.where(g.valid, k - self.k0 - self.k1 * g.Omega, 0.0)
+        g = grid
+        # physical length per reduced length (1 in the filling medium, n_p/n_g in a plate)
+        ref = cell.ref_medium      # diffraction of the equivalent cell (medium at the mirrors)
+        self.dz_scale = float(med.n(g.omega0) / ref.n(g.omega0))
+        k = ref.k(np.where(g.valid, g.omega, g.omega0))
+        self._beta = np.where(g.valid, self.k - self.k0 - self.k1 * g.Omega, 0.0) * self.dz_scale
+        if self.dz_scale != 1.0:          # Kerr per reduced length = Kerr per physical length x dz_scale
+            self.n2 = self.n2 * self.dz_scale
+            self.igamma = self.igamma * self.dz_scale
+            self._ig1 = self._ig1 * self.dz_scale
         self._cdt = np.complex64 if g.dtype == np.complex64 else np.complex128
         self._kx2 = (g.kx ** 2)[:, None, None]
         self._ky2 = (g.ky ** 2)[None, :, None]
@@ -103,7 +125,7 @@ class LensFrameSolver(UPPESolver):
         while zeta < zeta_b - 1e-15 * self.zR:
             h = self.h_max
             if nonlinear:
-                h = min(h, self.phi_max / (self.k0 * self.n2 * max(self._Ipeak, 1e-30)))
+                h = min(h, self.phi_max / (self.kv0 * self.n2 * max(self._Ipeak, 1e-30)))
             h = min(h, zeta_b - zeta)
             zm = zeta + h / 2
             dz1 = self.z_of_zeta(zm) - self.z_of_zeta(zeta)
@@ -112,13 +134,13 @@ class LensFrameSolver(UPPESolver):
             Bw = self._potential(Bw, h / 2)
             if nonlinear:
                 Bw = self._rk4(Bw, h)
-                self.B += self.k0 * self.n2 * self._Ipeak * h       # dB = k0 n2 I_B dzeta
+                self.B += self.kv0 * self.n2 * self._Ipeak * h      # dB = kv0 n2 I_B dzeta
             Bw = self._potential(Bw, h / 2)
             pend_h, pend_dz = h / 2, dz2
             zeta += h
             self.nsteps += 1
         Bw = self._kinetic(Bw, pend_h, pend_dz)
-        self.z += self.z_of_zeta(zeta_b) - self.z_of_zeta(zeta_a)
+        self.z += (self.z_of_zeta(zeta_b) - self.z_of_zeta(zeta_a)) * self.dz_scale
         return Bw
 
     def propagate_linear_zeta(self, Bw, zeta_a, zeta_b):
@@ -154,11 +176,22 @@ def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=Tr
 
     In the frame the eigenmode wavefront cancels exactly, so the field at that plane is just the
     profile with coordinates scaled by s(z): B(xi) = s U(s xi). `beam` is given in PHYSICAL
-    coordinates at the image plane (e.g. top_hat(1.12 * w_mirror))."""
-    S = LensFrameSolver(grid, cell)
-    z = cell.d / 2 if image_z is None else float(image_z)
-    s = np.sqrt(1 + (z / S.zR) ** 2)
-    zeta = S.zR * np.arctan(z / S.zR)
+    coordinates at the image plane (e.g. top_hat(1.12 * w_mirror)). With plates / gas regions,
+    image_z is the physical position on pass 1 (towards mirror B) and the frame is the one of the
+    equivalent cell."""
+    if cell.segmented:          # plates / gas regions: equivalent cell, walk back through the segments
+        from .simulation import Walker, make_solvers
+        solvers = make_solvers(grid, cell, LensFrameSolver, {})
+        walker = Walker(grid, cell, solvers, lens=True)
+        z = cell.d / 2 if image_z is None else float(image_z)
+        zr = cell.u_of_z(z, 1, grid.lambda0) - walker.uc      # reduced distance to the centre
+        zR = solvers.zR
+    else:
+        S = LensFrameSolver(grid, cell)
+        z = cell.d / 2 if image_z is None else float(image_z)
+        zr, zR = z, S.zR
+    s = np.sqrt(1 + (zr / zR) ** 2)
+    zeta = zR * np.arctan(zr / zR)
     Xs, Ys = s * grid.X, s * grid.Y
     Aw = np.zeros(grid.shape, grid.dtype)
     for j in Pulse._support(E):
@@ -166,7 +199,10 @@ def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=Tr
         U /= np.sqrt(np.sum(np.abs(U) ** 2) * grid.dA)
         Aw[:, :, j] = E[j] * U
     p = Pulse(grid, Aw)
-    p.Aw = S.propagate_linear_zeta(p.Aw, zeta, 0.0)
+    if cell.segmented:
+        p.Aw = walker.walk(p.Aw, 1, walker.uc + zr, walker.uc, False)
+    else:
+        p.Aw = S.propagate_linear_zeta(p.Aw, zeta, 0.0)
     p.set_energy(energy)
     if verbose:
         print(f"[Pulse] near field imaged at z = {z*100:.1f} cm (lens frame, s = {s:.2f})")
@@ -174,16 +210,20 @@ def imaged_near_field_lens(grid, E, beam, energy, cell, image_z=None, verbose=Tr
 
 
 class LensFrameSimulation(MPCSimulation):
+    _lens = True
+
     """MPCSimulation on a beam-following grid. Cell-centre records are physical; mirror records
     and sim.state (right after a mirror) are in frame coordinates (physical x = mirror_scale * x,
-    fluence / mirror_scale**2)."""
+    fluence / mirror_scale**2). Plates: segment walk of MPCSimulation, each segment in zeta of the
+    equivalent cell."""
 
-    solver: LensFrameSolver
+    solver: Any     # LensFrameSolver, or a _SolverSet of them (one per medium) with plates
 
     def __init__(self, pulse, cell, *, phi_max=0.02, gouy_step=0.05, self_steepening=True,
                  kernels="auto", **kw):
-        solver = LensFrameSolver(pulse.grid, cell, phi_max=phi_max, gouy_step=gouy_step,
-                                 self_steepening=self_steepening, kernels=kernels)
+        self.grid, self.cell = pulse.grid, cell
+        kw_s = {"phi_max": phi_max, "gouy_step": gouy_step, "self_steepening": self_steepening, "kernels": kernels}
+        solver = self._make_solvers(LensFrameSolver, kw_s)
         self.mirror_scale = solver.s_m
         super().__init__(pulse, cell, solver=solver, **kw)
 

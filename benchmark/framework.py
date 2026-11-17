@@ -276,15 +276,9 @@ def _simulation_class():
 
         prop_s = 0.0
 
-        def _to_centre(self, Aw):
+        def _half_pass(self, Aw, p, half):      # both halves of every pass, with or without plates
             t = time.perf_counter()
-            out = super()._to_centre(Aw)
-            self.prop_s += time.perf_counter() - t
-            return out
-
-        def _to_mirror(self, Aw):
-            t = time.perf_counter()
-            out = super()._to_mirror(Aw)
+            out = super()._half_pass(Aw, p, half)
             self.prop_s += time.perf_counter() - t
             return out
 
@@ -570,9 +564,14 @@ class Benchmark:
 
         print("analysing ...")
         M, C = self.standard_metrics(ctx)
+        ctx.metrics = M                            # extra_metrics may build on the standard ones
         M2, C2 = self.extra_metrics(ctx)
         M.update(M2)
         C.update(C2)
+        for k, ref in self.reference.items():      # Refs on standard metrics that are built without one
+            m = M.get(k)
+            if m is not None and m["ref"] is None:
+                M[k] = metric(m["value"], m["unit"], m["label"], ref)
         if args.quick:              # 2 passes on a small, coarse grid: no reference applies
             for m in M.values():
                 if m["status"] in ("ok", "off"):
@@ -646,7 +645,7 @@ def parse_args(bench, argv=None):
     p.add_argument("--quick", action="store_true", help="few passes on a coarse grid: checks the script only")
     p.add_argument("--device", default="auto", choices=["auto", "cpu", "gpu"])
     p.add_argument("--gpu-id", default=None, help="CUDA device index (sets CUDA_VISIBLE_DEVICES)")
-    p.add_argument("--fft", default="auto", choices=["auto", "scipy", "fftw"],
+    p.add_argument("--fft", default="fftw", choices=["auto", "scipy", "fftw"],
                    help="CPU FFT library (auto = scipy; fftw needs pyFFTW)")
     p.add_argument("--kernels", default="auto", choices=["auto", "numba", "numpy"],
                    help="CPU array kernels between the FFTs (auto: Numba if installed)")
