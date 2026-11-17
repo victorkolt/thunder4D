@@ -1,0 +1,486 @@
+{
+ "schema": 1,
+ "benchmark": "omar2024_400uJ",
+ "title": "hybrid air-bulk MPC, 400 uJ, 276 fs -> 27 fs (Omar et al., Opt. Express 32, 13235, 2024)",
+ "paper": {
+  "citation": "A. Omar et al., Opt. Express 32, 13235 (2024)",
+  "doi": "10.1364/OE.513732",
+  "url": "https://arxiv.org/abs/2311.18468"
+ },
+ "run": {
+  "id": "run_1f48035c",
+  "label": null,
+  "date": "2026-11-13T15:34:34",
+  "thunder4d": "1.3.0",
+  "git": "e70090f",
+  "python": "3.13.6",
+  "device": "cpu",
+  "fft": "fftw",
+  "solver": "LensFrameSimulation",
+  "kernels": "numba",
+  "cpu_count": 12,
+  "propagation_s": 84.06189630003064,
+  "ms_per_step": 41.38941225998554,
+  "grid_shape": [
+   75,
+   75,
+   270
+  ],
+  "grid": "Grid 75x75x270 (12 MB per field, cpu/fftw) | box 4.74 x 4.74 mm, dx = 63.2 um | T = 3645 fs, dt = 13.50 fs | lambda window 920-1189 nm",
+  "dx_um": 63.23510931934403,
+  "dt_fs": 13.498983088731004,
+  "mirror_scale": 1.2262071964855912,
+  "finished": true,
+  "passes_done": 46,
+  "wall_s": 110.58723664283752,
+  "nsteps": 2031,
+  "command": "bench_omar2024_400uJ.py",
+  "phi_max": 0.02,
+  "gouy_step": 0.05,
+  "quick": false,
+  "n_passes": 46,
+  "preset": {
+   "box_factor": 8.0,
+   "points_per_waist": 8,
+   "time_window_factor": 8
+  },
+  "record_every": 1,
+  "promoted": "2026-11-17T10:36:11"
+ },
+ "params": {
+  "lambda0": 1.037e-06,
+  "fwhm": 2e-13,
+  "gdd_fs2": 13700.0,
+  "window_fwhm": 4.5e-13,
+  "energy": 0.0004,
+  "R": 2.0,
+  "d": 1.34,
+  "n_passes": 46,
+  "plate_t": 0.001,
+  "plate_z": 0.47,
+  "n2_fs": 3e-20,
+  "n2_air": 2.4e-23,
+  "ar_R": 0.00025,
+  "mirror_R": 0.9995,
+  "mirror_gdd": 0.0,
+  "vortex": 0,
+  "M2_input": 1.14,
+  "m2_model": "none",
+  "matching_power": "weighted",
+  "injection": "kerr-matched",
+  "lambda_min": 9.2e-07,
+  "lambda_max": 1.17e-06,
+  "compressor_gdd": -3000.0,
+  "compressor_T": 1.0
+ },
+ "overrides": {},
+ "calibrated": {},
+ "metrics": {
+  "w0_um": {
+   "value": 558.1178389031594,
+   "unit": "um",
+   "label": "linear eigenmode waist (1/e2 radius)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "w_mirror_um": {
+   "value": 684.3681105500399,
+   "unit": "um",
+   "label": "linear mode on mirror (1/e2 radius)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "w0_injected_um": {
+   "value": 542.5219634041008,
+   "unit": "um",
+   "label": "injected waist (kerr-matched)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "P_over_Pc": {
+   "value": 0.19111037510902118,
+   "unit": "",
+   "label": "input peak power / Pc in the air",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "B_estimate_rad": {
+   "value": 29.70674698004718,
+   "unit": "rad",
+   "label": "B-integral, matched-mode estimate",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "transmission": {
+   "value": 0.9539666888425926,
+   "unit": "",
+   "label": "cell transmission",
+   "ref": {
+    "value": 0.91,
+    "tol": null,
+    "kind": "min",
+    "note": "overall efficiency > 91 %"
+   },
+   "status": "ok",
+   "deviation": 0.04831504268416767
+  },
+  "B_rad": {
+   "value": 34.0568885999452,
+   "unit": "rad",
+   "label": "B-integral, on-axis peak",
+   "ref": {
+    "value": 16.56,
+    "tol": 0.2,
+    "kind": "rel",
+    "note": "authors' 3D simulation, HR mirrors"
+   },
+   "status": "off",
+   "deviation": 1.0565753985474153
+  },
+  "I_peak_max_Wcm2": {
+   "value": 329423320514.56,
+   "unit": "W/cm2",
+   "label": "max peak intensity at the cell centre",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "F_mirror_max_Jcm2": {
+   "value": 0.07376989362542932,
+   "unit": "J/cm2",
+   "label": "max fluence on the mirrors",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "edge_fraction": {
+   "value": 0.0003308465238660574,
+   "unit": "",
+   "label": "max fluence fraction outside 70 % of the box (should be ~0)",
+   "ref": {
+    "value": 0.001,
+    "tol": null,
+    "kind": "max",
+    "note": "numerical check"
+   },
+   "status": "ok",
+   "deviation": -0.6691534761339426
+  },
+  "eta00_final": {
+   "value": 0.9864745275794108,
+   "unit": "",
+   "label": "HG00 fraction, output",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "M2x": {
+   "value": 1.0198231533401485,
+   "unit": "",
+   "label": "M2 x of the simulated field (ideal-mode input: 1 or l+1)",
+   "ref": {
+    "value": 1.3,
+    "tol": null,
+    "kind": "max",
+    "note": "measured 1.17 x 1.23 (input 1.14); simulated < 1.05"
+   },
+   "status": "ok",
+   "deviation": -0.21552065127680886
+  },
+  "M2y": {
+   "value": 1.019823214869857,
+   "unit": "",
+   "label": "M2 y of the simulated field (ideal-mode input: 1 or l+1)",
+   "ref": {
+    "value": 1.3,
+    "tol": null,
+    "kind": "max",
+    "note": "measured 1.17 x 1.23"
+   },
+   "status": "ok",
+   "deviation": -0.2155206039462639
+  },
+  "w_breathing": {
+   "value": 0.3672102320215706,
+   "unit": "",
+   "label": "beam-size oscillation (max-min)/w_in",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "span20_nm": {
+   "value": 134.34439656017298,
+   "unit": "nm",
+   "label": "-20 dB spectral width",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "rms_width_nm": {
+   "value": 30.91105302941051,
+   "unit": "nm",
+   "label": "RMS spectral width",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "lambda_centroid_nm": {
+   "value": 1035.1847450307173,
+   "unit": "nm",
+   "label": "spectral centre of mass",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "ftl_fs": {
+   "value": 26.39753311766725,
+   "unit": "fs",
+   "label": "Fourier limit (integrated spectrum)",
+   "ref": {
+    "value": 25,
+    "tol": 0.1,
+    "kind": "rel",
+    "note": "authors' simulation (HR mirrors); measured spectrum close to it"
+   },
+   "status": "ok",
+   "deviation": 0.05590132470669005
+  },
+  "comp_fs": {
+   "value": 28.00656382847582,
+   "unit": "fs",
+   "label": "compressed with the paper's -3000 fs2",
+   "ref": {
+    "value": 27,
+    "tol": 0.1,
+    "kind": "rel",
+    "note": "SHG-FROG at -3000 fs2"
+   },
+   "status": "ok",
+   "deviation": 0.03728014179540072
+  },
+  "comp_peak_ratio": {
+   "value": 0.9044946656313164,
+   "unit": "",
+   "label": "peak power / Fourier limit (paper GDD)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "best_gdd_fs2": {
+   "value": -2941.692752871484,
+   "unit": "fs2",
+   "label": "GDD maximising the peak power",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "best_comp_fs": {
+   "value": 27.829515359397746,
+   "unit": "fs",
+   "label": "compressed with the best GDD",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "best_peak_ratio": {
+   "value": 0.9120974426265736,
+   "unit": "",
+   "label": "peak power / Fourier limit (best GDD)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "best_peak_power_GW": {
+   "value": 11.909225913050216,
+   "unit": "GW",
+   "label": "compressed peak power (best GDD)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "V_weighted_x": {
+   "value": 0.9980375247055031,
+   "unit": "",
+   "label": "homogeneity, intensity weighted in 1/e2 (x)",
+   "ref": {
+    "value": 0.98,
+    "tol": null,
+    "kind": "min",
+    "note": "measured 98.1 % (x), 98.4 % (y)"
+   },
+   "status": "ok",
+   "deviation": 0.018405637454595027
+  },
+  "V_min_fwhm": {
+   "value": 0.9993808330801943,
+   "unit": "",
+   "label": "min homogeneity within FWHM",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "V_min_e2": {
+   "value": 0.986392519108179,
+   "unit": "",
+   "label": "min homogeneity within 1/e2",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "M2_input": {
+   "value": 1.0,
+   "unit": "",
+   "label": "input M2 per axis (in the n2, not in the field)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "M2x_beam": {
+   "value": 1.0198231533401485,
+   "unit": "",
+   "label": "M2 x of the output beam = input M2 x field M2",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "M2y_beam": {
+   "value": 1.019823214869857,
+   "unit": "",
+   "label": "M2 y of the output beam = input M2 x field M2",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "P_over_Pc_plate": {
+   "value": 346.2855275853244,
+   "unit": "",
+   "label": "input peak power / Pc of the mode in FS",
+   "ref": {
+    "value": 350,
+    "tol": null,
+    "kind": "info",
+    "note": "'350x higher than the critical power in FS'"
+   },
+   "status": "info",
+   "deviation": -0.010612778327644524
+  },
+  "I_plate_max_Wcm2": {
+   "value": 201587687346.57263,
+   "unit": "W/cm2",
+   "label": "peak intensity in a plate (matched estimate)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "B_matched_estimate_rad": {
+   "value": 42.74171401057026,
+   "unit": "rad",
+   "label": "B-integral, matched-mode estimate at the peak power (all media)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "B_plates_estimate_rad": {
+   "value": 16.849098226243058,
+   "unit": "rad",
+   "label": "same, plates only",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "B_fraction_plates_estimate": {
+   "value": 0.39420735963176823,
+   "unit": "",
+   "label": "share of the plates in the matched-mode estimate (no pulse stretching)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "w_mirror_matched_um": {
+   "value": 589.7046611665664,
+   "unit": "um",
+   "label": "Kerr-matched radius on the mirrors (weighted power)",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  },
+  "mirror_spot_dev": {
+   "value": 0.24123745570345,
+   "unit": "",
+   "label": "max deviation of the mirror spot from the matched mode",
+   "ref": {
+    "value": 0.25,
+    "tol": null,
+    "kind": "info",
+    "note": "the pulse stretches ~2x in the cell (positive GDD only): matched at the input power, the beam breathes later (the authors also see the caustic change)"
+   },
+   "status": "info",
+   "deviation": -0.03505017718619996
+  },
+  "B_fraction_plates": {
+   "value": 0.41127104622749094,
+   "unit": "",
+   "label": "share of the plates in the total B-integral",
+   "ref": {
+    "value": 0.356,
+    "tol": 0.25,
+    "kind": "rel",
+    "note": "authors' simulation: 5.9 of 16.56 rad in FS"
+   },
+   "status": "ok",
+   "deviation": 0.1552557478300308
+  },
+  "chirped_out_fwhm_fs": {
+   "value": 602.3693879178693,
+   "unit": "fs",
+   "label": "output pulse FWHM before the compressor",
+   "ref": {
+    "value": 616,
+    "tol": 0.15,
+    "kind": "rel",
+    "note": "authors' simulation (measured AC FWHM 621 fs)"
+   },
+   "status": "ok",
+   "deviation": -0.022127617016445958
+  },
+  "comp_peak_power_GW": {
+   "value": 11.809956707183,
+   "unit": "GW",
+   "label": "compressed peak power, -3000 fs2",
+   "ref": {
+    "value": 10.2,
+    "tol": 0.2,
+    "kind": "rel",
+    "note": "measured (their simulation: ~12 GW)"
+   },
+   "status": "ok",
+   "deviation": 0.1578388928610785
+  },
+  "main_pulse_fraction": {
+   "value": 0.8856909793406164,
+   "unit": "",
+   "label": "energy within 2 x FWHM of the compressed peak (-3000 fs2)",
+   "ref": {
+    "value": 0.78,
+    "tol": 0.08,
+    "kind": "abs",
+    "note": "energy in 2 x FWHM"
+   },
+   "status": "off",
+   "deviation": 0.13550125556489273
+  },
+  "peak_power_out_GW": {
+   "value": 11.809956707183,
+   "unit": "GW",
+   "label": "compressed peak power (-3000 fs2) x compressor T = 1",
+   "ref": null,
+   "status": "info",
+   "deviation": null
+  }
+ }
+}

@@ -13,6 +13,8 @@ stored and analysed the same way.
 | `bench_westerberg2025_250uJ.py` | Westerberg *et al.*, APL Photonics 10, 096103 (2025) | bulk MPC, 250 µJ, 180 fs → 42 fs, P ≈ 300 Pc(FS) |
 | `bench_omar2024_400uJ.py` | Omar *et al.*, Opt. Express 32, 13235 (2024) | hybrid air-bulk MPC, 400 µJ, 276 fs → 27 fs, one FS plate 20 cm from a mirror |
 | `bench_seidel2022_112uJ.py` | Seidel *et al.*, Ultrafast Sci. 2022, 9754919 (2022) | multi-pass multi-plate MPC, 112 µJ, 1.24 ps → 39 fs, six FS plates in air |
+| `bench_hu2025_flint_500nJ.py` | Hu *et al.*, arXiv:2511.08337 (2025) | oscillator-driven bulk MPC, 0.5 µJ, 120 fs → 8 fs FTL, one 2 mm FS plate, 68 passes |
+| `bench_hu2025_pharos_370nJ.py` | Hu *et al.*, arXiv:2511.08337 (2025) | same cell, 0.37 µJ, 100 fs → 10 fs (D-scan), plate 4 mm off-centre, 58 passes |
 | `bench_koltalo2025_gaussian_200uJ.py` | Koltalo *et al.*, APL Photonics 10, 046110 (2025) | bulk MPC, gaussian beam, 200 µJ: reference of the vortex cases |
 | `bench_koltalo2025_lg1.py` | Koltalo *et al.*, APL Photonics 10, 046110 (2025) | bulk MPC, LG₀,₁ vortex, 350 µJ |
 | `bench_koltalo2025_lg2.py` | Koltalo *et al.*, APL Photonics 10, 046110 (2025) | bulk MPC, LG₀,₂ vortex, 451 µJ |
@@ -21,7 +23,7 @@ stored and analysed the same way.
 The benchmarks of cells with plates share the Kerr-matched injection and the extra metrics (plates and
 their share of the B-integral, mirror spot vs matched mode, output before / after the compressor,
 main-pulse energy, topological charge, ring homogeneity IH/WH) in `plate_mpc.py`; the six Lund
-scripts also share their cell in `lund_bulk_mpc.py`. Neither module is a benchmark itself; each
+scripts also share their cell in `lund_bulk_mpc.py`, the two Hu scripts in `hu2025_bulk_mpc.py`. Neither module is a benchmark itself; each
 script is one energy or vortex order and runs on its own.
 
 ## Running

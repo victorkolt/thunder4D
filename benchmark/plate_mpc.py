@@ -11,6 +11,8 @@ Parameters read here (subclasses give them all in `params`):
                     "account for the measured M2 to determine the peak intensity"); "none": ideal beam.
                     Each benchmark follows what the authors' own simulation did.
     matching_power  Kerr matching at the "weighted" or "peak" power of the pulse
+    matching_scale  factor on that power (optional, default 1): a long pulse that stretches in the cell
+                    stays closer to the matched mode when matched below its peak power
     compressor_gdd  the paper's compressor GDD [fs^2] (None: best GDD only)
     compressor_T    compressor transmission (peak power after the compressor)
 """
@@ -34,6 +36,11 @@ class PlateMPCBenchmark(Benchmark):
         super().__init_subclass__(**kw)
         l = abs(int(cls.params.get("vortex", 0))) if cls.params else 0
         s = np.sqrt(l + 1)                     # second-moment size of LG_0,l / gaussian
+        # presets written in the subclass body are its base presets (else they would be overwritten here)
+        if "presets" in cls.__dict__:
+            cls.base_presets = cls.__dict__["presets"]
+        if "quick_preset" in cls.__dict__:
+            cls.base_quick = cls.__dict__["quick_preset"]
         cls.presets = [{**p, "box_factor": round(p["box_factor"] * s, 1)} for p in cls.base_presets]
         cls.quick_preset = {**cls.base_quick, "box_factor": round(cls.base_quick["box_factor"] * s, 1)}
 
@@ -54,9 +61,10 @@ class PlateMPCBenchmark(Benchmark):
         P, grid, cell = ctx.P, ctx.grid, ctx.cell
         E, src = self.spectrum(grid, P)
         l = int(P["vortex"])
-        pulse = th.Pulse.cell_matched(grid, E, cell, P["energy"], power=P["matching_power"], vortex=l,
-                                      verbose=False)
-        Pm = pulse.peak_power() if P["matching_power"] == "peak" else pulse.weighted_power()
+        probe = th.Pulse.cell_matched(grid, E, cell, P["energy"], nonlinear=False, verbose=False)
+        Pm = probe.peak_power() if P["matching_power"] == "peak" else probe.weighted_power()
+        Pm *= P.get("matching_scale", 1.0)
+        pulse = th.Pulse.cell_matched(grid, E, cell, P["energy"], power=Pm, vortex=l, verbose=False)
         ctx.lin = cell.linear_mode(P["lambda0"])
         ctx.mm = cell.nonlinear_mode(Pm, P["lambda0"], vortex=l)
         ctx.mm_peak = cell.nonlinear_mode(pulse.peak_power(), P["lambda0"], vortex=l)
@@ -142,6 +150,23 @@ class PlateMPCBenchmark(Benchmark):
         M["main_pulse_fraction"] = metric(Pc[main].sum() / Pc.sum(), "",
                                           f"energy within 2 x FWHM of the compressed peak ({gdd:.0f} fs2)",
                                           R.get("main_pulse_fraction"))
+        # best GDD + TOD (Nelder-Mead from the best GDD): does a TOD-matched compressor close the gap
+        # to the Fourier limit? (diagnostic: the papers' compressors are given as GDD only)
+        from scipy.optimize import minimize
+
+        def neg_peak(x):
+            return -integrated_power(grid, pix, spectral_phase(grid, wc, x[0] * 1e3, x[1] * 1e4),
+                                     self.compression_up)[1].max()
+        best = getattr(ctx, "metrics", {}).get("best_gdd_fs2")
+        x0 = [(best["value"] if best else gdd) / 1e3, 0.0]
+        res = minimize(neg_peak, x0, method="Nelder-Mead",
+                       options={"xatol": 1e-3, "fatol": 1e-4 * -neg_peak(x0), "maxfev": 120})
+        t3, P3 = integrated_power(grid, pix, spectral_phase(grid, wc, res.x[0] * 1e3, res.x[1] * 1e4),
+                                  self.compression_up)
+        M["gdd_tod_comp_fs"] = metric(fwhm(t3, P3), "fs", "compressed with the best GDD + TOD",
+                                      R.get("gdd_tod_comp_fs"))
+        M["gdd_tod_gdd_fs2"] = metric(res.x[0] * 1e3, "fs2", "GDD of that best GDD + TOD compression")
+        M["gdd_tod_tod_fs3"] = metric(res.x[1] * 1e4, "fs3", "TOD of that best GDD + TOD compression")
         T = P["compressor_T"]
         M["peak_power_out_GW"] = metric(Pc.max() / 1e9 * T, "GW",
                                         f"compressed peak power ({gdd:.0f} fs2) x compressor T = {T:g}",

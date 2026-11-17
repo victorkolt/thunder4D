@@ -331,7 +331,8 @@ class Pulse:
         """Gaussian input matched to the cell eigenmode, given at the cell centre (size ~ sqrt(lambda)).
 
         nonlinear=False: linear eigenmode (waist w0 at the centre). nonlinear=True: Kerr-matched mode
-        at the peak ('peak') or intensity-weighted ('weighted') power of the pulse. For a cell with
+        at the peak ('peak') or intensity-weighted ('weighted') power of the pulse, or at an explicit
+        power [W]. For a cell with
         plates this is the beam that, propagated linearly back to the injection plane (as the
         simulation does), gives the matched beam there: a gaussian of radius input_w with a
         spherical wavefront of radius input_R (MPC.nonlinear_mode). Without plates: the matched
@@ -343,7 +344,10 @@ class Pulse:
         Rc = np.inf
         if nonlinear:
             probe = cls.at_focus(grid, E, Beam(gaussian(w), chromatic_size="eigenmode"), energy)
-            P = probe.peak_power() if power == "peak" else probe.weighted_power()
+            if isinstance(power, (int, float)):
+                P = float(power)               # explicit matching power [W]
+            else:
+                P = probe.peak_power() if power == "peak" else probe.weighted_power()
             m = cell.nonlinear_mode(P, lam0, vortex=vortex)
             w, Rc = (m["input_w"], m["input_R"]) if cell.segmented else (m["w0"], np.inf)
             if verbose:
