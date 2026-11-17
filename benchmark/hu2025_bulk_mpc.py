@@ -29,7 +29,6 @@ n2(FS): with the band, n2 = 2.2e-20 m^2/W gives the measured Fourier limit (8.3 
 band edges and lost); the default 2.6e-20 sits between the two.
 """
 import numpy as np
-
 import plate_mpc as pm
 
 import thunder4d as th

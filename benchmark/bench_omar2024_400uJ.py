@@ -83,6 +83,9 @@ class Omar2024_400uJ(pm.PlateMPCBenchmark):
         "compressor_T": 1.0,           # not given (overall efficiency > 91 %)
     }
     gdd_bounds = (-8000.0, 0.0)
+    # quick check: 5 waists left 6e-3 of the fluence at the edge (the plate's strong Kerr lens far from the
+    # centre widens the beam on the first passes); 7 waists, same coarse sampling
+    quick_preset = {"box_factor": 7, "points_per_waist": 3, "time_window_factor": 4}
     calibrated = {"n2_air": {"paper": 8.0e-24,
                              "note": "electronic Kerr of air x 3, standing for the delayed Raman response of "
                                      "the authors' model (not quoted); fitted on their plate / air B split"}}
