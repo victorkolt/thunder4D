@@ -15,13 +15,16 @@ from typing import Any
 import numpy as np
 
 from ...inputfile import build_simulation, describe_input
-from .. import metrics as _builtin_metrics  # noqa: F401  (registers the built-in metrics)
+from .. import (
+    metrics as _builtin_metrics,  # noqa: F401  (registers the built-in metrics)
+    prefs,
+)
 from .._qt import QtGui, QtWidgets
 from ..plotting import FigureWidget
 from ..registry import METRICS, PANELS, PanelSpec
 from ..results import load_results
 from ..session import Session
-from ..worker import Task
+from ..worker import Task, notify_done
 
 WARNING_STYLE = "color: #d32f2f; font-weight: bold;"
 
@@ -139,7 +142,8 @@ class RunPanel(QtWidgets.QWidget):
         self.log.setMaximumBlockCount(5000)
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.addTab(self.figure, "Live plots")
-        self.tabs.addTab(self.log, "Log")
+        self.log_box = prefs.log_box(self.log)
+        self.tabs.addTab(self.log_box, "Log")
         layout.addWidget(self.tabs, 1)
 
         session.config_changed.connect(self._config_changed)
@@ -172,8 +176,7 @@ class RunPanel(QtWidgets.QWidget):
         self._output_edited = True
 
     def browse(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Results file", self.output.text(),
-                                                        "NumPy archive (*.npz)")
+        path = prefs.save_file(self, "Results file", self.output.text(), "NumPy archive (*.npz)")
         if path:
             self.output.setText(path if path.endswith(".npz") else path + ".npz")
             self._output_edited = True
@@ -228,13 +231,14 @@ class RunPanel(QtWidgets.QWidget):
 
     def on_failed(self, trace: str) -> None:
         self.log.appendPlainText(trace)
-        self.tabs.setCurrentWidget(self.log)
+        self.tabs.setCurrentWidget(self.log_box)
         self.timing.setText("failed: see the log")
 
     def on_done(self, outcome: Outcome) -> None:
         self.outcome = outcome
         state = "stopped" if outcome.stopped else "done"
         self.timing.setText(f"{state}: {outcome.passes_done}/{outcome.n_passes} passes, saved {outcome.path.name}")
+        notify_done(self, f"Simulation {state}: {outcome.passes_done}/{outcome.n_passes} passes.")
         try:
             self.session.set_results(load_results(outcome.path))
         except (OSError, ValueError) as err:
@@ -292,8 +296,8 @@ class RunPanel(QtWidgets.QWidget):
         if self.spectra:
             ax = fig.add_subplot(rows, cols, n)
             for (lam, s), label in ((self.spectra[0], "input"), (self.spectra[-1], "now")):
-                ax.semilogy(lam * 1e9, s / s.max(), label=label)
-            ax.set_ylim(1e-4, 2)
+                ax.plot(lam * 1e9, s / s.max(), label=label)
+            ax.set_ylim(0, 1.05)
             ax.set_xlabel("wavelength [nm]")
             ax.set_title("Spectrum", fontsize="medium")
             ax.legend(fontsize="small")

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ...inputfile import BLOCKS, FIELDS, default_input, describe_input, get_path, input_problems, save_input, set_path
+from .. import prefs
 from .._qt import QtCore, QtWidgets
 from ..fields import FieldEditor, editor_for
 from ..registry import PANELS, PanelSpec
@@ -251,7 +252,7 @@ class BuilderPanel(QtWidgets.QWidget):
     def open_dialog(self) -> None:
         if not self.confirm_discard():
             return
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open input", "", FILE_FILTER)
+        path = prefs.open_file(self, "Open input", FILE_FILTER)
         if path:
             self.open_file(path)
 
@@ -265,6 +266,7 @@ class BuilderPanel(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(self, "Open input", f"Cannot open {path}:\n{err}")
             return False
         self.load_config(raw, path)
+        prefs.add_recent("input", path)
         return True
 
     def save(self) -> bool:
@@ -274,7 +276,7 @@ class BuilderPanel(QtWidgets.QWidget):
 
     def save_as_dialog(self) -> bool:
         start = str(self.path or Path.cwd() / f"{self.cfg.get('name') or 'mpc'}.json")
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save input", start, FILE_FILTER)
+        path = prefs.save_file(self, "Save input", start, FILE_FILTER)
         return self.save_to(path) if path else False
 
     def save_to(self, path: str | Path) -> bool:
@@ -290,6 +292,7 @@ class BuilderPanel(QtWidgets.QWidget):
         self.path = Path(path)
         self.modified = False
         self.refresh()
+        prefs.add_recent("input", path)
         return True
 
 

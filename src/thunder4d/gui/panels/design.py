@@ -29,13 +29,14 @@ from ...design import (
 from ...design.catalog.gases import GASES
 from ...design.catalog.mirrors import cavity_coatings
 from ...inputfile import GRID_PRESETS, Field
+from .. import prefs
 from .._qt import QtCore, QtGui, QtWidgets
 from ..fields import FieldEditor, editor_for
 from ..plotting import FigureWidget
 from ..registry import PANELS, PanelSpec
 from ..session import Session
 from ..splitting import RatioSplitter
-from ..worker import Task
+from ..worker import Task, notify_done
 
 # Sections of the form, then the fields: attribute path in DesignProblem -> Field.
 # A Limit is edited through its value (".value") or its safety factor (".safety").
@@ -310,7 +311,7 @@ class DesignPanel(QtWidgets.QWidget):
     def open_problem(self) -> None:
         if self.task is not None:
             return
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open a design problem", "", "JSON (*.json)")
+        path = prefs.open_file(self, "Open a design problem", "JSON (*.json)")
         if path:
             self.open_file(path)
 
@@ -327,15 +328,16 @@ class DesignPanel(QtWidgets.QWidget):
         self.preset.setCurrentText("custom")
         self.preset.blockSignals(False)
         self.load_problem(problem)
+        prefs.add_recent("problem", path)
         self.state.setText(f"Opened {path}")
         return True
 
     def save_problem(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save the design problem", "design_problem.json",
-                                                        "JSON (*.json)")
+        path = prefs.save_file(self, "Save the design problem", "design_problem.json", "JSON (*.json)")
         if path:
             with open(path, "w") as f:
                 json.dump(self.problem.to_dict(), f, indent=2)
+            prefs.add_recent("problem", path)
             self.state.setText(f"Saved {path}")
 
     def apply_preset(self, name: str) -> None:
@@ -440,6 +442,7 @@ class DesignPanel(QtWidgets.QWidget):
         self.log = QtWidgets.QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setFont(self.details.font())
+        self.log_box = prefs.log_box(self.log)
         map_box = QtWidgets.QWidget()
         map_layout = QtWidgets.QVBoxLayout(map_box)
         self.map_button = QtWidgets.QPushButton("Map pressure × round trips around the selected design")
@@ -451,7 +454,7 @@ class DesignPanel(QtWidgets.QWidget):
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.addTab(self.details, "Details")
         self.tabs.addTab(map_box, "Design map")
-        self.tabs.addTab(self.log, "Log")
+        self.tabs.addTab(self.log_box, "Log")
 
         lower = QtWidgets.QWidget()
         lower_layout = QtWidgets.QVBoxLayout(lower)
@@ -498,7 +501,7 @@ class DesignPanel(QtWidgets.QWidget):
             return designer.refine(starts)
 
         self.log.clear()
-        self.tabs.setCurrentWidget(self.log)
+        self.tabs.setCurrentWidget(self.log_box)
         self._run(Task(work, self), "Searching…", self._done)
 
     def _run(self, task: Task, message: str, on_success: Any) -> None:
@@ -547,11 +550,12 @@ class DesignPanel(QtWidgets.QWidget):
 
     def _failed(self, trace: str) -> None:
         self.log.appendPlainText(trace)
-        self.tabs.setCurrentWidget(self.log)
+        self.tabs.setCurrentWidget(self.log_box)
         self.state.setText("Failed: see the log.")
 
     def _done(self, result: DesignResult) -> None:
         self.show_result(result)
+        notify_done(self, f"Design search finished: {len(self.candidates)} design(s).")
 
     def show_result(self, result: DesignResult) -> None:
         self.result = result
@@ -626,7 +630,7 @@ class DesignPanel(QtWidgets.QWidget):
         self.state.setText("Designs copied to the clipboard.")
 
     def export_csv(self) -> None:
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save the designs", "designs.csv", "CSV (*.csv)")
+        path = prefs.save_file(self, "Save the designs", "designs.csv", "CSV (*.csv)")
         if path:
             with open(path, "w", newline="") as f:
                 csv.writer(f).writerows(self.table_rows())
@@ -635,7 +639,7 @@ class DesignPanel(QtWidgets.QWidget):
     def save_results(self) -> None:
         if self.result is None:
             return
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save design results", "design.json", "JSON (*.json)")
+        path = prefs.save_file(self, "Save design results", "design.json", "JSON (*.json)")
         if path:
             self.result.save_json(path)
             self.state.setText(f"Saved {path}")

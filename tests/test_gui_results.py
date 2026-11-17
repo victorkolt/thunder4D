@@ -154,3 +154,54 @@ def test_pulse_figure_of_a_large_grid(panel, saved, monkeypatch):
     c = panel.results.cache["compress"]
     assert len(c["t_fs"]) == built.grid.Nt                     # not oversampled
     assert c["fwhm_fs"] == pytest.approx(dg.compress(built.grid, built.sim.Aw)["fwhm_fs"])
+
+
+def test_axis_limits_and_log_scale(panel, saved):
+    panel.session.set_results(load_results(saved[1]))
+    select(panel, "spectra")
+    i = 1                                                       # the line plot, next to the dB map
+    panel.axis_box.setCurrentIndex(i)
+    assert panel.axes[i].get_yscale() == "linear" and not panel.log_boxes["y"].isChecked()   # linear by default
+    panel.log_boxes["y"].setChecked(True)
+    assert panel.axes[i].get_yscale() == "log"
+    panel.limit_edits["xmin"].setText("1000")
+    panel.limit_edits["xmax"].setText("1060")
+    panel._limits_edited()
+    assert panel.axes[i].get_xlim() == (1000.0, 1060.0)
+    panel.slider.setValue(0)                                    # another pass: the settings stay
+    assert panel.axes[i].get_xlim() == (1000.0, 1060.0) and panel.axes[i].get_yscale() == "log"
+    panel._reset_axis()
+    assert panel.axes[i].get_yscale() == "linear" and panel.axes[i].get_xlim() != (1000.0, 1060.0)
+
+
+def test_db_switch_on_maps(panel, saved):
+    panel.session.set_results(load_results(saved[1]))
+    select(panel, "spectra")
+    assert panel.db_box.isEnabled()
+    def labels():
+        return [a.get_ylabel() for a in panel.figure.figure.axes]
+
+    assert "dB" in labels()
+    panel.db_box.setChecked(False)
+    assert "normalised" in labels() and "dB" not in labels()
+
+
+def test_figures_follow_the_theme_but_export_on_paper(panel, saved, tmp_path):
+    from thunder4d.gui import theme
+
+    panel.session.set_results(load_results(saved[1]))
+    select(panel, "spectra")
+    theme.apply("Nord")
+    fig = panel.figure.figure
+    nord = pytest.approx((0x2E / 255, 0x34 / 255, 0x40 / 255))
+    assert fig.get_facecolor()[:3] == nord                          # the existing figure was recoloured
+    assert panel.figure.figure.axes[0].title.get_color() == theme.THEMES["Nord"].text
+    panel.export_figure(tmp_path / "f.png")
+    from PIL import Image
+
+    pixel = Image.open(tmp_path / "f.png").convert("RGB").getpixel((2, 2))
+    assert pixel == (255, 255, 255)                                  # the file is on white
+    assert fig.get_facecolor()[:3] == nord                          # and the window is unchanged
+    panel.figure_copy()
+    assert not QtWidgets.QApplication.clipboard().image().isNull()
+    theme.apply("Light")

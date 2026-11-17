@@ -127,18 +127,26 @@ def draw_mirror_fluence(r, fig, o):
 
 
 # ------------------------------------------------------------ spectra and pulses
+def _scaled(S, o, floor_db):
+    """A map normalised to its maximum, as (values, vmin, vmax, colour bar label): dB down to floor_db, or linear."""
+    if o.get("db", True):
+        return 10 * np.log10(np.maximum(S, 1e-6)), floor_db, 0, "dB"
+    return S, 0, 1, "normalised"
+
+
 def draw_spectra(r, fig, o):
     lam, S, p = np.asarray(r["lam"]) * NM, np.asarray(r["spectrum"]), _passes(r)
     i = _index(r, o)
     ax1, ax2 = fig.subplots(1, 2)
     Sn = S / S.max(axis=1, keepdims=True)
-    mesh = ax1.pcolormesh(lam, p, 10 * np.log10(np.maximum(Sn, 1e-6)), vmin=-40, vmax=0, shading="nearest")
+    values, vmin, vmax, label = _scaled(Sn, o, -40)
+    mesh = ax1.pcolormesh(lam, p, values, vmin=vmin, vmax=vmax, shading="nearest")
     ax1.axhline(p[i], color="w", lw=0.8, ls="--")
     ax1.set(xlabel="wavelength [nm]", ylabel="pass", title="Spectrum versus pass")
-    fig.colorbar(mesh, ax=ax1, label="dB")
-    ax2.semilogy(lam, Sn[0], label="input")
-    ax2.semilogy(lam, Sn[i], label=_pass_label(r, o))
-    ax2.set(xlabel="wavelength [nm]", ylim=(1e-4, 2), title="Spectrum (normalised)")
+    fig.colorbar(mesh, ax=ax1, label=label)
+    ax2.plot(lam, Sn[0], label="input")
+    ax2.plot(lam, Sn[i], label=_pass_label(r, o))
+    ax2.set(xlabel="wavelength [nm]", ylim=(0, 1.05), title="Spectrum (normalised)")
     ax2.legend()
 
 
@@ -198,25 +206,25 @@ def draw_fluence(r, fig, o):
     ax.set(xlabel="x [mm]", ylabel="y [mm]", title=f"Fluence at the cell centre, {_pass_label(r, o)}")
 
 
-def _spectrogram(fig, coord, lam, S, xlabel, title):
+def _spectrogram(fig, coord, lam, S, xlabel, title, o):
     ax = fig.subplots()
     S = np.asarray(S, dtype=float)
-    mesh = ax.pcolormesh(np.asarray(lam) * NM, coord, 10 * np.log10(np.maximum(S / S.max(), 1e-6)),
-                         vmin=-30, vmax=0, shading="nearest")
-    fig.colorbar(mesh, ax=ax, label="dB")
+    values, vmin, vmax, label = _scaled(S / S.max(), o, -30)
+    mesh = ax.pcolormesh(np.asarray(lam) * NM, coord, values, vmin=vmin, vmax=vmax, shading="nearest")
+    fig.colorbar(mesh, ax=ax, label=label)
     ax.set(xlabel="wavelength [nm]", ylabel=xlabel, title=title)
 
 
 def draw_sgram_x(r, fig, o):
     i = _index(r, o)
     _spectrogram(fig, np.asarray(r["x"]) * MM, r["lam"], r["sgram_x"][i], "x [mm]",
-                 f"(x, λ) spectrogram at the cell centre, {_pass_label(r, o)}")
+                 f"(x, λ) spectrogram at the cell centre, {_pass_label(r, o)}", o)
 
 
 def draw_sgram_theta(r, fig, o):
     i = _index(r, o)
     _spectrogram(fig, np.asarray(r["theta"]) * 1e3, r["lam"], r["sgram_theta"][i], "angle [mrad]",
-                 f"(θ, λ) spectrogram of the collimated beam, {_pass_label(r, o)}")
+                 f"(θ, λ) spectrogram of the collimated beam, {_pass_label(r, o)}", o)
 
 
 def draw_mode_content(r, fig, o):
@@ -252,15 +260,16 @@ for spec in (
     PlotSpec("quality", "Beam quality", draw_quality, ("pass", "eta00_total", "M2x_mean", "M2y_mean"), 40, "Evolution"),
     PlotSpec("mirror_fluence", "Fluence on the mirrors", draw_mirror_fluence,
              ("pass", "fluence_mirror", "mirror_scale"), 50, "Evolution", data=mirror_fluence_data),
-    PlotSpec("spectra", "Spectra", draw_spectra, ("pass", "lam", "spectrum"), 60, "Spectra and pulse", per_pass=True),
+    PlotSpec("spectra", "Spectra", draw_spectra, ("pass", "lam", "spectrum"), 60, "Spectra and pulse", per_pass=True,
+             db=True),
     PlotSpec("pulse", "Output and compressed pulse", draw_pulse, ("Aw_final", "grid", "lambda0"), 70,
              "Spectra and pulse", data=pulse_data),
     PlotSpec("fluence", "Fluence map", draw_fluence, ("pass", "fluence", "grid"), 80, "Spatio-spectral",
              per_pass=True, data=_index_data("fluence")),
     PlotSpec("sgram_x", "(x, λ) spectrogram", draw_sgram_x, ("pass", "x", "lam", "sgram_x"), 90, "Spatio-spectral",
-             per_pass=True, data=_index_data("sgram_x")),
+             per_pass=True, db=True, data=_index_data("sgram_x")),
     PlotSpec("sgram_theta", "(θ, λ) spectrogram", draw_sgram_theta, ("pass", "theta", "lam", "sgram_theta"), 100,
-             "Spatio-spectral", per_pass=True, data=_index_data("sgram_theta")),
+             "Spatio-spectral", per_pass=True, db=True, data=_index_data("sgram_theta")),
     PlotSpec("mode_content", "Mode content per colour", draw_mode_content, ("pass", "lam", "eta00", "spectrum"), 110,
              "Spatio-spectral", per_pass=True, data=_index_data("eta00", "spectrum")),
 ):

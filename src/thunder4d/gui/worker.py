@@ -19,6 +19,16 @@ from typing import Any
 from ._qt import QtCore
 
 
+def notify_done(widget: Any, message: str) -> None:
+    """A long task is over: flash the window in the task bar and say so in the status bar."""
+    from ._qt import QtWidgets
+
+    QtWidgets.QApplication.alert(widget.window())
+    status = getattr(widget.window(), "statusBar", None)
+    if status is not None:
+        status().showMessage(message, 15000)
+
+
 class Cancelled(Exception):
     """Raised by Task.check() once the task was asked to stop."""
 
